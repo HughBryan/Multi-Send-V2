@@ -20,7 +20,7 @@ namespace Multi_Send
         public TaskPaneForm()
         {
             InitializeComponent();
-            this.outlookApp = Globals.ThisAddIn.Application;
+            InitializeOutlookApp();
             InitializeWebView();
         }
 
@@ -46,19 +46,44 @@ namespace Multi_Send
             this.ResumeLayout(false);
         }
 
+        private void InitializeOutlookApp()
+        {
+            try
+            {
+                this.outlookApp = Globals.ThisAddIn.Application;
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Warning: Could not initialize Outlook Application: {ex.Message}");
+                this.outlookApp = null;
+            }
+        }
+
         private async void InitializeWebView()
         {
             try
             {
-                // Get the path to your HTML file
-                string projectPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                htmlFilePath = Path.Combine(projectPath, "TaskPaneUI", "index.html");
+                // Create a custom user data folder in a writable location
+                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EmailDuplicator");
 
-                // Ensure WebView2 is initialized
-                await webView.EnsureCoreWebView2Async(null);
+                // Ensure the directory exists and is writable
+                if (!Directory.Exists(userDataFolder))
+                {
+                    Directory.CreateDirectory(userDataFolder);
+                }
+
+                // Create WebView2 environment with custom data folder
+                var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+
+                // Initialize WebView2 with the custom environment
+                await webView.EnsureCoreWebView2Async(environment);
 
                 // Set up message handling (JavaScript → C#)
                 webView.CoreWebView2.WebMessageReceived += WebView_MessageReceived;
+
+                // Get the path to your HTML file
+                string projectPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                htmlFilePath = Path.Combine(projectPath, "TaskPaneUI", "index.html");
 
                 // Navigate to your HTML file
                 if (File.Exists(htmlFilePath))
@@ -67,61 +92,25 @@ namespace Multi_Send
                 }
                 else
                 {
-                    // Fallback: create a simple HTML page if file doesn't exist
-                    string fallbackHtml = @"
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <title>Email Duplicator</title>
-                            <style>
-                                body { font-family: Segoe UI, sans-serif; padding: 20px; background: #fafafa; }
-                                .container { background: white; padding: 16px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-                                button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 3px; }
-                                button:hover { background: #106ebe; }
-                                .error { color: #d13438; margin: 10px 0; padding: 8px; background: #fde7e9; border: 1px solid #f5c6cb; border-radius: 3px; }
-                                .success { color: #107c10; margin: 10px 0; padding: 8px; background: #dff6dd; border: 1px solid #c3e6c3; border-radius: 3px; }
-                            </style>
-                        </head>
-                        <body>
-                            <div class='container'>
-                                <h3>Email Duplicator</h3>
-                                <div class='error'>HTML files not found. Please add your taskpane.html files to TaskPaneUI folder.</div>
-                                <p><strong>Expected path:</strong><br>" + htmlFilePath + @"</p>
-                                <button onclick='sendMessage(""test"")'>Test Connection</button>
-                                <div id='result'></div>
-                            </div>
-                            
-                            <script>
-                                function sendMessage(action) {
-                                    window.chrome.webview.postMessage({
-                                        action: action,
-                                        data: 'Hello from JavaScript!'
-                                    });
-                                }
-                                
-                                window.addEventListener('message', function(event) {
-                                    try {
-                                        const response = JSON.parse(event.data);
-                                        const resultDiv = document.getElementById('result');
-                                        if (response.type === 'success') {
-                                            resultDiv.innerHTML = '<div class=""success"">' + response.message + '</div>';
-                                        } else if (response.type === 'error') {
-                                            resultDiv.innerHTML = '<div class=""error"">' + response.message + '</div>';
-                                        }
-                                    } catch (error) {
-                                        console.error('Error handling response:', error);
-                                    }
-                                });
-                            </script>
-                        </body>
-                        </html>";
+                    // Show error if HTML files not found
+                    string errorHtml = $@"<!DOCTYPE html>
+                    <html><head><title>Email Duplicator</title>
+                    <style>body {{ font-family: Segoe UI; padding: 20px; }} .error {{ color: red; }}</style></head>
+                    <body>
+                        <h3>Email Duplicator</h3>
+                        <div class='error'>
+                            <p>⚠️ HTML files not found!</p>
+                            <p>Expected path: {htmlFilePath}</p>
+                            <p>Please make sure your TaskPaneUI folder contains index.html, taskpane.css, and taskpane.js</p>
+                        </div>
+                    </body></html>";
 
-                    webView.CoreWebView2.NavigateToString(fallbackHtml);
+                    webView.CoreWebView2.NavigateToString(errorHtml);
                 }
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show($"Error initializing WebView2: {ex.Message}");
+                MessageBox.Show($"WebView2 initialization error: {ex.Message}");
             }
         }
 
@@ -129,33 +118,57 @@ namespace Multi_Send
         {
             try
             {
-                string message = e.TryGetWebMessageAsString();
-                var messageData = JsonConvert.DeserializeObject<dynamic>(message);
+                string message = "";
 
-                string action = messageData.action;
-
-                switch (action)
+                // Use the working method to get the message (handles COM registration issues)
+                try
                 {
-                    case "test":
-                        SendResponseToJS("success", "Test successful! C# backend is connected.");
-                        break;
+                    message = e.TryGetWebMessageAsString();
+                }
+                catch (System.Exception)
+                {
+                    // Fallback for COM registration issues
+                    message = e.WebMessageAsJson;
+                    // Remove JSON escaping if present
+                    if (message.StartsWith("\"") && message.EndsWith("\""))
+                    {
+                        message = message.Substring(1, message.Length - 2).Replace("\\\"", "\"");
+                    }
+                }
 
-                    case "duplicateEmail":
-                        _ = Task.Run(async () => await HandleDuplicateEmail(messageData.data));
-                        break;
+                // Parse the JSON message
+                if (message.StartsWith("{"))
+                {
+                    dynamic messageData = JsonConvert.DeserializeObject(message);
+                    string action = messageData.action?.ToString() ?? "";
 
-                    case "detectPlaceholder":
-                        _ = Task.Run(async () => await HandleDetectPlaceholder());
-                        break;
+                    switch (action)
+                    {
+                        case "test":
+                            SendResponseToJS("success", "🎉 Perfect! Communication working!");
+                            break;
 
-                    default:
-                        SendResponseToJS("error", $"Unknown action: {action}");
-                        break;
+                        case "duplicateEmail":
+                            _ = Task.Run(async () => await HandleDuplicateEmail(messageData.data));
+                            break;
+
+                        case "detectPlaceholder":
+                            _ = Task.Run(async () => await HandleDetectPlaceholder());
+                            break;
+
+                        default:
+                            SendResponseToJS("error", $"Unknown action: {action}");
+                            break;
+                    }
+                }
+                else
+                {
+                    SendResponseToJS("success", $"Received: {message}");
                 }
             }
             catch (System.Exception ex)
             {
-                SendResponseToJS("error", $"Error handling message: {ex.Message}");
+                SendResponseToJS("error", $"Error processing message: {ex.Message}");
             }
         }
 
@@ -163,6 +176,8 @@ namespace Multi_Send
         {
             try
             {
+                if (webView?.CoreWebView2 == null) return;
+
                 if (webView.InvokeRequired)
                 {
                     webView.Invoke(new System.Action(() => SendResponseToJS(type, message, data)));
@@ -216,6 +231,12 @@ namespace Multi_Send
         {
             try
             {
+                if (outlookApp == null)
+                {
+                    SendResponseToJS("error", "Outlook application not available. Please restart the add-in.");
+                    return;
+                }
+
                 string placeholder = requestData.placeholder;
                 var recipients = JsonConvert.DeserializeObject<List<Recipient>>(requestData.recipients.ToString());
 
@@ -269,7 +290,7 @@ namespace Multi_Send
                 }
                 else
                 {
-                    SendResponseToJS("error", $"⚠️ Created {successCount} out of {totalCount} duplicates. Some failed.");
+                    SendResponseToJS("error", $"⚠️ Created {successCount} out of {totalCount} duplicates. Some failed - check debug output for details.");
                 }
 
                 // Clean up temp files
@@ -388,6 +409,12 @@ namespace Multi_Send
         {
             try
             {
+                if (outlookApp == null)
+                {
+                    SendResponseToJS("error", "Outlook application not available.");
+                    return;
+                }
+
                 var selectedItem = outlookApp.ActiveExplorer().Selection;
 
                 if (selectedItem.Count == 0)
