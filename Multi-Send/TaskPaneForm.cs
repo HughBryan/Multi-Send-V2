@@ -21,7 +21,9 @@ namespace Multi_Send
         {
             InitializeComponent();
             InitializeOutlookApp();
-            InitializeWebView();
+
+            // Initialize WebView when the control is actually loaded
+            this.Load += TaskPaneForm_Load;
         }
 
         private void InitializeComponent()
@@ -59,60 +61,66 @@ namespace Multi_Send
             }
         }
 
-        private async void InitializeWebView()
+        private async void TaskPaneForm_Load(object sender, EventArgs e)
+        {
+            await InitializeWebViewAsync();
+        }
+
+        private async Task InitializeWebViewAsync()
         {
             try
             {
                 // Create a custom user data folder in a writable location
-                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EmailDuplicator");
+                string userDataFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "EmailDuplicator");
 
-                // Ensure the directory exists and is writable
-                if (!Directory.Exists(userDataFolder))
-                {
-                    Directory.CreateDirectory(userDataFolder);
-                }
+                Directory.CreateDirectory(userDataFolder);
 
-                // Create WebView2 environment with custom data folder
                 var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-
-                // Initialize WebView2 with the custom environment
                 await webView.EnsureCoreWebView2Async(environment);
-
-                // Set up message handling (JavaScript → C#)
                 webView.CoreWebView2.WebMessageReceived += WebView_MessageReceived;
 
-                // Get the path to your HTML file
-                string projectPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                htmlFilePath = Path.Combine(projectPath, "TaskPaneUI", "index.html");
+                string htmlPath;
 
-                // Navigate to your HTML file
-                if (File.Exists(htmlFilePath))
+#if DEBUG
+                // Always use your dev repo folder when running under F5 / Debug
+                htmlPath = @"C:\Users\hughb\source\repos\Multi-Send\Multi-Send\TaskPaneUI\index.html";
+#else
+        // In published builds, use the add-in deployment folder
+        string assemblyDir = Path.GetDirectoryName(
+            System.Reflection.Assembly.GetExecutingAssembly().Location);
+        System.Diagnostics.Debug.WriteLine("Add-in loaded from: " + assemblyDir);
+
+        htmlPath = Path.Combine(assemblyDir, "TaskPaneUI", "index.html");
+#endif
+
+                if (File.Exists(htmlPath))
                 {
-                    webView.CoreWebView2.Navigate($"file:///{htmlFilePath.Replace('\\', '/')}");
+                    htmlFilePath = htmlPath;
+                    string navPath = $"file:///{htmlPath.Replace('\\', '/')}";
+                    System.Diagnostics.Debug.WriteLine("[TaskPaneForm] Loading UI from: " + navPath);
+                    webView.CoreWebView2.Navigate(navPath);
                 }
                 else
                 {
-                    // Show error if HTML files not found
-                    string errorHtml = $@"<!DOCTYPE html>
-                    <html><head><title>Email Duplicator</title>
-                    <style>body {{ font-family: Segoe UI; padding: 20px; }} .error {{ color: red; }}</style></head>
-                    <body>
-                        <h3>Email Duplicator</h3>
-                        <div class='error'>
-                            <p>⚠️ HTML files not found!</p>
-                            <p>Expected path: {htmlFilePath}</p>
-                            <p>Please make sure your TaskPaneUI folder contains index.html, taskpane.css, and taskpane.js</p>
-                        </div>
-                    </body></html>";
-
+                    string errorHtml = $@"
+                <!DOCTYPE html>
+                <html>
+                <body style='font-family: Segoe UI; padding:20px;'>
+                    <h3>TaskPaneUI\index.html not found</h3>
+                    <p>Expected path: {htmlPath}</p>
+                </body>
+                </html>";
                     webView.CoreWebView2.NavigateToString(errorHtml);
                 }
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show($"WebView2 initialization error: {ex.Message}");
+                MessageBox.Show($"WebView2 init error: {ex.Message}");
             }
         }
+
 
         private void WebView_MessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
@@ -120,29 +128,25 @@ namespace Multi_Send
             {
                 string message = "";
 
-                // Use the working method to get the message (handles COM registration issues)
                 try
                 {
                     message = e.TryGetWebMessageAsString();
                 }
-                catch (System.Exception)
+                catch
                 {
-                    // Fallback for COM registration issues
                     message = e.WebMessageAsJson;
-                    // Remove JSON escaping if present
                     if (message.StartsWith("\"") && message.EndsWith("\""))
                     {
                         message = message.Substring(1, message.Length - 2).Replace("\\\"", "\"");
                     }
                 }
 
-                // Parse the JSON message
                 if (message.StartsWith("{"))
                 {
                     dynamic messageData = JsonConvert.DeserializeObject(message);
-                    string action = messageData.action?.ToString() ?? "";
+                    string actionName = messageData.action?.ToString() ?? "";
 
-                    switch (action)
+                    switch (actionName)
                     {
                         case "test":
                             SendResponseToJS("success", "🎉 Perfect! Communication working!");
@@ -157,7 +161,7 @@ namespace Multi_Send
                             break;
 
                         default:
-                            SendResponseToJS("error", $"Unknown action: {action}");
+                            SendResponseToJS("error", $"Unknown action: {actionName}");
                             break;
                     }
                 }
@@ -184,13 +188,7 @@ namespace Multi_Send
                     return;
                 }
 
-                var response = new
-                {
-                    type = type,
-                    message = message,
-                    data = data
-                };
-
+                var response = new { type, message, data };
                 string jsonResponse = JsonConvert.SerializeObject(response);
                 webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
             }
@@ -210,14 +208,7 @@ namespace Multi_Send
                     return;
                 }
 
-                var response = new
-                {
-                    type = "progress",
-                    current = current,
-                    total = total,
-                    message = message
-                };
-
+                var response = new { type = "progress", current, total, message };
                 string jsonResponse = JsonConvert.SerializeObject(response);
                 webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
             }
@@ -242,9 +233,7 @@ namespace Multi_Send
 
                 SendResponseToJS("info", $"Starting duplication for {recipients.Count} recipients...");
 
-                // Get the currently selected email
                 var selectedItem = outlookApp.ActiveExplorer().Selection;
-
                 if (selectedItem.Count == 0)
                 {
                     SendResponseToJS("error", "Please select an email to duplicate.");
@@ -258,23 +247,17 @@ namespace Multi_Send
                     return;
                 }
 
-                // Extract email data including attachments
                 var emailData = ExtractEmailData(sourceMailItem);
-
                 int successCount = 0;
-                int totalCount = recipients.Count;
 
-                // Create duplicates for each recipient
                 for (int i = 0; i < recipients.Count; i++)
                 {
                     try
                     {
-                        SendProgressToJS(i + 1, totalCount, $"Creating email {i + 1}/{totalCount} for {recipients[i].Name}...");
-
+                        SendProgressToJS(i + 1, recipients.Count,
+                            $"Creating email {i + 1}/{recipients.Count} for {recipients[i].Name}...");
                         await CreateDuplicateEmail(emailData, placeholder, recipients[i]);
                         successCount++;
-
-                        // Small delay to prevent overwhelming Outlook
                         await Task.Delay(100);
                     }
                     catch (System.Exception ex)
@@ -283,17 +266,15 @@ namespace Multi_Send
                     }
                 }
 
-                // Send final result
-                if (successCount == totalCount)
+                if (successCount == recipients.Count)
                 {
-                    SendResponseToJS("success", $"✅ Successfully created {successCount} duplicate emails! Check your Drafts folder.");
+                    SendResponseToJS("success", $"✅ Successfully created {successCount} duplicate emails! Check Drafts.");
                 }
                 else
                 {
-                    SendResponseToJS("error", $"⚠️ Created {successCount} out of {totalCount} duplicates. Some failed - check debug output for details.");
+                    SendResponseToJS("error", $"⚠️ Created {successCount} out of {recipients.Count}. Some failed.");
                 }
 
-                // Clean up temp files
                 CleanupTempFiles(emailData.Attachments);
             }
             catch (System.Exception ex)
@@ -314,14 +295,12 @@ namespace Multi_Send
                 Attachments = new List<AttachmentData>()
             };
 
-            // Extract attachments
             foreach (Attachment attachment in sourceEmail.Attachments)
             {
                 try
                 {
                     string tempPath = Path.Combine(Path.GetTempPath(), $"EmailDup_{Guid.NewGuid()}_{attachment.FileName}");
                     attachment.SaveAsFile(tempPath);
-
                     emailData.Attachments.Add(new AttachmentData
                     {
                         FileName = attachment.FileName,
@@ -343,26 +322,17 @@ namespace Multi_Send
             MailItem newMail = null;
             try
             {
-                // Create new mail item
                 newMail = outlookApp.CreateItem(OlItemType.olMailItem) as MailItem;
 
-                // Replace placeholder with recipient name
-                string personalizedSubject = ReplacePlaceholder(sourceData.Subject, placeholder, recipient.Name);
-                string personalizedBody = ReplacePlaceholder(sourceData.Body, placeholder, recipient.Name);
-                string personalizedHTMLBody = ReplacePlaceholder(sourceData.HTMLBody, placeholder, recipient.Name);
-
-                // Set email properties
-                newMail.Subject = personalizedSubject;
-                newMail.Body = personalizedBody;
-                newMail.HTMLBody = personalizedHTMLBody;
+                newMail.Subject = ReplacePlaceholder(sourceData.Subject, placeholder, recipient.Name);
+                newMail.Body = ReplacePlaceholder(sourceData.Body, placeholder, recipient.Name);
+                newMail.HTMLBody = ReplacePlaceholder(sourceData.HTMLBody, placeholder, recipient.Name);
                 newMail.Importance = sourceData.Importance;
                 newMail.Sensitivity = sourceData.Sensitivity;
 
-                // Add recipient
                 newMail.Recipients.Add(recipient.Email);
                 newMail.Recipients.ResolveAll();
 
-                // Add attachments
                 foreach (var attachmentData in sourceData.Attachments)
                 {
                     try
@@ -378,8 +348,7 @@ namespace Multi_Send
                     }
                 }
 
-                // Save as draft (don't send automatically)
-                newMail.Save();
+                newMail.Save(); // Save as draft
             }
             catch (System.Exception ex)
             {
@@ -400,7 +369,6 @@ namespace Multi_Send
             if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(placeholder))
                 return text;
 
-            // Use regex for case-insensitive replacement
             string escapedPlaceholder = Regex.Escape(placeholder);
             return Regex.Replace(text, escapedPlaceholder, replacement, RegexOptions.IgnoreCase);
         }
@@ -416,7 +384,6 @@ namespace Multi_Send
                 }
 
                 var selectedItem = outlookApp.ActiveExplorer().Selection;
-
                 if (selectedItem.Count == 0)
                 {
                     SendResponseToJS("error", "Please select an email to detect placeholder from.");
@@ -430,13 +397,12 @@ namespace Multi_Send
                     return;
                 }
 
-                // Look for common placeholder patterns
                 string text = $"{mailItem.Subject} {mailItem.Body}";
                 var placeholderPatterns = new[]
                 {
-                    @"\{\{[^}]+\}\}", // {{name}}, {{firstname}}, etc.
-                    @"\[[^\]]+\]",   // [name], [firstname], etc.
-                    @"\$[A-Za-z_][A-Za-z0-9_]*", // $name, $firstname, etc.
+                    @"\{\{[^}]+\}\}",
+                    @"\[[^\]]+\]",
+                    @"\$[A-Za-z_][A-Za-z0-9_]*",
                 };
 
                 foreach (var pattern in placeholderPatterns)
@@ -460,26 +426,16 @@ namespace Multi_Send
 
         private void CleanupTempFiles(List<AttachmentData> attachments)
         {
-            try
+            foreach (var attachment in attachments)
             {
-                foreach (var attachment in attachments)
+                try
                 {
-                    try
+                    if (File.Exists(attachment.TempFilePath))
                     {
-                        if (File.Exists(attachment.TempFilePath))
-                        {
-                            File.Delete(attachment.TempFilePath);
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore errors when cleaning up individual files
+                        File.Delete(attachment.TempFilePath);
                     }
                 }
-            }
-            catch
-            {
-                // Ignore errors during cleanup
+                catch { /* ignore */ }
             }
         }
 
@@ -494,7 +450,7 @@ namespace Multi_Send
         }
     }
 
-    // Data classes for email duplication
+    // Data classes
     public class Recipient
     {
         public string Email { get; set; }

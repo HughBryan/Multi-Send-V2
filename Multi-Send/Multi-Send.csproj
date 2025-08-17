@@ -239,10 +239,18 @@
     <AppDesigner Include="Properties\" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include=".gitignore" />
-    <Content Include="TaskPaneUI\index.html" />
-    <Content Include="TaskPaneUI\taskpane.css" />
-    <Content Include="TaskPaneUI\taskpane.js" />
+    <Content Include="TaskPaneUI\index.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSTO>true</IncludeInVSTO>
+    </Content>
+    <Content Include="TaskPaneUI\taskpane.css">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSTO>true</IncludeInVSTO>
+    </Content>
+    <Content Include="TaskPaneUI\taskpane.js">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSTO>true</IncludeInVSTO>
+    </Content>
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
@@ -279,15 +287,4 @@
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\Microsoft.Web.WebView2.1.0.3405.78\build\Microsoft.Web.WebView2.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Web.WebView2.1.0.3405.78\build\Microsoft.Web.WebView2.targets'))" />
   </Target>
-	<ItemGroup>
-		<Content Include="TaskPaneUI\index.html">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</Content>
-		<Content Include="TaskPaneUI\taskpane.css">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</Content>
-		<Content Include="TaskPaneUI\taskpane.js">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</Content>
-	</ItemGroup>
 </Project>

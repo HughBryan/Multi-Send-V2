@@ -14,15 +14,7 @@ namespace Multi_Send
         {
             try
             {
-                // Create your task pane form
-                taskPane = new TaskPaneForm();
-
-                // Create a custom task pane in Outlook
-                customTaskPane = this.CustomTaskPanes.Add(taskPane, "Email Duplicator");
-                customTaskPane.Visible = true;
-                customTaskPane.Width = 400;
-                customTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
-
+                CreateTaskPane();
                 MessageBox.Show("Email Duplicator Add-in loaded successfully!");
             }
             catch (Exception ex)
@@ -31,39 +23,97 @@ namespace Multi_Send
             }
         }
 
-        private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
+        private void CreateTaskPane()
+        {
+            if (customTaskPane == null)
+            {
+                taskPane = new TaskPaneForm();
+                customTaskPane = this.CustomTaskPanes.Add(taskPane, "Email Duplicator");
+                customTaskPane.Visible = true;
+                customTaskPane.Width = 400;
+                customTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
+            }
+        }
+
+        public void ToggleTaskPane()
         {
             try
             {
-                // Clean up
-                if (customTaskPane != null)
+                // If disposed or null → rebuild
+                if (customTaskPane == null ||
+                    customTaskPane.Control == null ||
+                    customTaskPane.Control.IsDisposed)
                 {
-                    customTaskPane.Dispose();
+                    RecreateTaskPane();
                 }
-                if (taskPane != null)
+                else
                 {
-                    taskPane.Dispose();
+                    customTaskPane.Visible = !customTaskPane.Visible;
                 }
             }
             catch (Exception ex)
             {
-                // Log error but don't show message box during shutdown
-                System.Diagnostics.Debug.WriteLine($"Error during shutdown: {ex.Message}");
+                MessageBox.Show($"Error toggling task pane: {ex.Message}");
+                RecreateTaskPane();
+            }
+        }
+
+        private void RecreateTaskPane()
+        {
+            try
+            {
+                // Remove from Outlook's collection if it exists
+                if (customTaskPane != null)
+                {
+                    try { this.CustomTaskPanes.Remove(customTaskPane); } catch { }
+                    customTaskPane.Dispose();
+                    customTaskPane = null;
+                }
+
+                if (taskPane != null)
+                {
+                    taskPane.Dispose();
+                    taskPane = null;
+                }
+
+                // Build fresh one
+                CreateTaskPane();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error recreating task pane: {ex.Message}");
+            }
+        }
+
+        private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
+        {
+            try
+            {
+                if (customTaskPane != null)
+                {
+                    try { this.CustomTaskPanes.Remove(customTaskPane); } catch { }
+                    customTaskPane.Dispose();
+                    customTaskPane = null;
+                }
+
+                if (taskPane != null)
+                {
+                    taskPane.Dispose();
+                    taskPane = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Shutdown error: {ex.Message}");
             }
         }
 
         #region VSTO generated code
-
-        /// <summary>
-        /// Required method for Designer support - do not modify
-        /// the contents of this method with the code editor.
-        /// </summary>
         private void InternalStartup()
         {
             this.Startup += new System.EventHandler(ThisAddIn_Startup);
             this.Shutdown += new System.EventHandler(ThisAddIn_Shutdown);
         }
-
         #endregion
     }
 }
