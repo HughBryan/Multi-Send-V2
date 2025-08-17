@@ -1,0 +1,22 @@
+# Visual Studio temporary files
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# VSTO specific
+publish/
+*.manifest
+*.application
+
+# Other temp files
+*.tmp
+*.log
