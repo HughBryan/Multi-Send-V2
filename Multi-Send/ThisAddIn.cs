@@ -33,7 +33,6 @@ namespace Multi_Send
                 this.Application.Inspectors.NewInspector += Inspectors_NewInspector;
 
                 // Set up display change detection
-                SetupDisplayChangeDetection();
                 SystemEvents.DisplaySettingsChanged += (_, __) => RecreateAllTaskPanesPreservingVisibility();
             }
             catch (Exception ex)
@@ -42,18 +41,7 @@ namespace Multi_Send
             }
         }
 
-        private void SetupDisplayChangeDetection()
-        {
-            try
-            {
-                // Hook into Windows display change events
-                SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error setting up display change detection: {ex.Message}");
-            }
-        }
+
         private void RecreateAllTaskPanesPreservingVisibility()
         {
             try
@@ -88,114 +76,9 @@ namespace Multi_Send
             }
             catch { }
         }
-        private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
-        {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine("Display settings changed - fixing task panes");
-
-                // Delay the fix slightly to let Windows finish the display change
-                Timer delayTimer = new Timer();
-                delayTimer.Interval = 500; // 500ms delay
-                delayTimer.Tick += (s, ev) =>
-                {
-                    delayTimer.Stop();
-                    delayTimer.Dispose();
-                    ForceRedockAllTaskPanes();
-                };
-                delayTimer.Start();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error handling display settings change: {ex.Message}");
-            }
-        }
-
-        private void ForceRedockAllTaskPanes()
-        {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine("Force redocking all task panes");
-
-                // Force redock main explorer task pane
-                if (customTaskPane != null && !customTaskPane.Control.IsDisposed)
-                {
-                    ForceRedockSingleTaskPane(customTaskPane);
-                }
-
-                // Force redock all inspector task panes
-                var inspectorsToRemove = new List<Outlook.Inspector>();
-
-                foreach (var kvp in inspectorTaskPanes)
-                {
-                    try
-                    {
-                        var inspector = kvp.Key;
-                        var taskPane = kvp.Value;
-
-                        if (taskPane == null || taskPane.Control == null || taskPane.Control.IsDisposed)
-                        {
-                            inspectorsToRemove.Add(inspector);
-                        }
-                        else
-                        {
-                            ForceRedockSingleTaskPane(taskPane);
-                        }
-                    }
-                    catch
-                    {
-                        inspectorsToRemove.Add(kvp.Key);
-                    }
-                }
-
-                // Clean up invalid inspectors
-                foreach (var inspector in inspectorsToRemove)
-                {
-                    inspectorTaskPanes.Remove(inspector);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error force redocking task panes: {ex.Message}");
-            }
-        }
 
 
 
-        private void ForceRedockSingleTaskPane(Microsoft.Office.Tools.CustomTaskPane taskPane)
-        {
-            try
-            {
-                if (taskPane != null && !taskPane.Control.IsDisposed)
-                {
-                    bool wasVisible = taskPane.Visible;
-
-                    System.Diagnostics.Debug.WriteLine($"Force redocking task pane - was visible: {wasVisible}");
-
-                    // Temporarily hide, reset properties, then restore visibility
-                    taskPane.Visible = false;
-
-                    // Force undock and redock
-                    taskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionFloating;
-                    taskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
-
-                    // Reset width
-                    taskPane.Width = 400;
-
-                    // Restore visibility if it was visible before
-                    if (wasVisible)
-                    {
-                        taskPane.Visible = true;
-                    }
-
-                    System.Diagnostics.Debug.WriteLine("Task pane redocked successfully");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error force redocking single task pane: {ex.Message}");
-            }
-        }
 
         private void Inspectors_NewInspector(Outlook.Inspector Inspector)
         {
@@ -283,106 +166,12 @@ namespace Multi_Send
 
         public void ToggleTaskPane()
         {
-            try
-            {
-                // Toggle the shared visibility state
-                isTaskPaneVisible = !isTaskPaneVisible;
-
-                System.Diagnostics.Debug.WriteLine($"Toggling task pane visibility to: {isTaskPaneVisible}");
-
-                // Apply the new state to ALL task panes
-                SetAllTaskPanesVisibility(isTaskPaneVisible);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error toggling task pane: {ex.Message}");
-            }
+            try { RecreateTaskPane(); customTaskPane.Visible = true; }
+            catch (Exception ex) { MessageBox.Show(ex.Message); }
         }
 
-        private void SetAllTaskPanesVisibility(bool visible)
-        {
-            try
-            {
-                // Set main explorer task pane visibility
-                if (customTaskPane == null || customTaskPane.Control == null || customTaskPane.Control.IsDisposed)
-                {
-                    RecreateTaskPane();
-                }
 
-                if (customTaskPane != null)
-                {
-                    customTaskPane.Visible = visible;
-                    // Also ensure proper docking when showing
-                    if (visible)
-                    {
-                        ForceRedockSingleTaskPane(customTaskPane);
-                    }
-                }
 
-                // Set all inspector task panes visibility
-                var inspectorsToRemove = new List<Outlook.Inspector>();
-
-                foreach (var kvp in inspectorTaskPanes)
-                {
-                    try
-                    {
-                        var inspector = kvp.Key;
-                        var taskPane = kvp.Value;
-
-                        // Check if inspector is still valid
-                        if (taskPane == null || taskPane.Control == null || taskPane.Control.IsDisposed)
-                        {
-                            inspectorsToRemove.Add(inspector);
-                        }
-                        else
-                        {
-                            taskPane.Visible = visible;
-                            // Also ensure proper docking when showing
-                            if (visible)
-                            {
-                                ForceRedockSingleTaskPane(taskPane);
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        inspectorsToRemove.Add(kvp.Key);
-                    }
-                }
-
-                // Clean up invalid inspectors
-                foreach (var inspector in inspectorsToRemove)
-                {
-                    inspectorTaskPanes.Remove(inspector);
-                }
-
-                // Create task panes for any new inspectors that might be open
-                EnsureAllInspectorsHaveTaskPanes();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error setting task pane visibility: {ex.Message}");
-            }
-        }
-
-        private void EnsureAllInspectorsHaveTaskPanes()
-        {
-            try
-            {
-                // Check all open inspectors and create task panes if needed
-                foreach (Outlook.Inspector inspector in this.Application.Inspectors)
-                {
-                    if (inspector.CurrentItem is Outlook.MailItem && !inspectorTaskPanes.ContainsKey(inspector))
-                    {
-                        CreateInspectorTaskPane(inspector);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error ensuring inspectors have task panes: {ex.Message}");
-            }
-        }
 
         private void RecreateTaskPane()
         {
@@ -421,8 +210,6 @@ namespace Multi_Send
         {
             try
             {
-                // Unhook display change events
-                SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
 
                 // Clean up inspector task panes
                 foreach (var kvp in inspectorTaskPanes)

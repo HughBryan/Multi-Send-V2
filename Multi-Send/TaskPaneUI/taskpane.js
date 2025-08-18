@@ -244,11 +244,6 @@ function renderRecipients() {
     });
 }
 
-// Add this at the top of your file with other global variables
-let autoDetectTimeouts = {};
-
-
-
 
 function updateRecipient(index, field, value) {
 
@@ -396,12 +391,6 @@ function processPastedEmails(text) {
         // Clear existing empty recipients
         recipients = recipients.filter(r => r.email.trim() || r.name.trim());
         
-        // Add new recipients (avoid duplicates)
-        newRecipients.forEach(newRecipient => {
-            if (!recipients.some(r => r.email.toLowerCase() === newRecipient.email.toLowerCase())) {
-                recipients.push(newRecipient);
-            }
-        });
         
         // Add new recipients (avoid duplicates)
         newRecipients.forEach(newRecipient => {
@@ -410,10 +399,6 @@ function processPastedEmails(text) {
             }
         });
 
-        // REMOVED: Auto-add empty row
-
-        renderRecipients();
-        updateCountText();
         
         renderRecipients();
         updateCountText();
@@ -519,4 +504,5 @@ function resetUI() {
 
     document.getElementById("progressFill").style.width = "0%";
 
+    hideStatus();
 }
