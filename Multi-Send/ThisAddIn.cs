@@ -15,7 +15,6 @@ namespace Multi_Send
             try
             {
                 CreateTaskPane();
-                MessageBox.Show("Email Duplicator Add-in loaded successfully!");
             }
             catch (Exception ex)
             {

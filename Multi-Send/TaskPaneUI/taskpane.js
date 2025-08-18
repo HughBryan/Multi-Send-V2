@@ -7,13 +7,10 @@ let recipients = [];
 // Initialize the taskpane
 
 document.addEventListener('DOMContentLoaded', function () {
-
-    addRecipient(); // Start with one empty recipient
-
+    // Start with no recipients - users can add them manually or paste
     updateCountText();
-
     setupPasteHandler();
-
+    renderRecipients(); // Render empty list
 });
 
 
@@ -183,56 +180,35 @@ function removeRecipient(index) {
 
 
 function renderRecipients() {
-
     const emailList = document.getElementById('emailList');
-
     emailList.innerHTML = '';
 
-
-
     recipients.forEach((recipient, index) => {
-
         const row = document.createElement('div');
-
         row.className = 'email-input-row';
 
-
-
         row.innerHTML = `
-
             <input type="email" 
-
                    class="email-input" 
-
                    placeholder="email@example.com"
-
                    value="${recipient.email}"
-
-                   oninput="updateRecipient(${index}, 'email', this.value)">
-
+                   oninput="updateRecipient(${index}, 'email', this.value); autoDetectName(${index});">
             <input type="text" 
-
                    class="name-input" 
-
                    placeholder="Name"
-
                    value="${recipient.name}"
-
                    oninput="updateRecipient(${index}, 'name', this.value)">
-
             <button class="suggest-btn" onclick="suggestName(${index})">Auto</button>
-
             <button class="remove-btn" onclick="removeRecipient(${index})">×</button>
-
         `;
 
-
-
         emailList.appendChild(row);
-
     });
-
 }
+
+// Add this at the top of your file with other global variables
+let autoDetectTimeouts = {};
+
 
 
 
@@ -248,32 +224,34 @@ function updateRecipient(index, field, value) {
 
 }
 
-
-
 function suggestName(index) {
+    suggestNameForIndex(index, true); // true = show status message for manual clicks
+}
 
+function suggestNameForIndex(index, shouldShowStatus = true) {
     const email = recipients[index].email;
 
     if (email && email.includes('@')) {
-
         const namePart = email.split('@')[0];
 
-        const suggestedName = namePart.replace(/[._-]/g, ' ')
-
+        const words = namePart.replace(/[._-]/g, ' ')
             .split(' ')
-
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .filter(word => word.length > 0);
 
-            .join(' ');
+        // Only use the FIRST name instead of joining all words
+        const suggestedName = words.length > 0 ? words[0] : '';
 
         recipients[index].name = suggestedName;
-
         renderRecipients();
-
         updateCountText();
 
+        // Only show status for manual button clicks, not auto-detection
+        if (shouldShowStatus) {
+            showStatus(`Auto-suggested name: ${suggestedName}`, 'success');
+            setTimeout(hideStatus, 2000);
+        }
     }
-
 }
 
 
@@ -323,73 +301,112 @@ function detectPlaceholder() {
 
 
 function setupPasteHandler() {
-
     document.addEventListener('paste', function (e) {
-
         const pastedText = e.clipboardData.getData('text');
-
-        if (pastedText && pastedText.includes('@')) {
-
-            showPasteHint();
-
-            setTimeout(() => {
-
-                processPastedEmails(pastedText);
-
-                hidePasteHint();
-
-            }, 100);
-
+        
+        if (pastedText) {
+            // Check if it contains emails or looks like structured data
+            if (pastedText.includes('@') || pastedText.includes('\t') || pastedText.split('\n').length > 1) {
+                showPasteHint();
+                
+                setTimeout(() => {
+                    processPastedEmails(pastedText);
+                    hidePasteHint();
+                }, 100);
+            }
         }
-
     });
-
 }
 
 
 
 function processPastedEmails(text) {
-
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-
-    const foundEmails = text.match(emailRegex);
-
-
-
-    if (foundEmails && foundEmails.length > 0) {
-
-        // Clear existing empty recipients
-
-        recipients = recipients.filter(r => r.email.trim() || r.name.trim());
-
-
-
-        // Add new recipients
-
-        foundEmails.forEach(email => {
-
-            if (!recipients.some(r => r.email === email)) {
-
-                recipients.push({ email: email, name: '' });
-
+    const lines = text.split(/\r?\n/).filter(line => line.trim());
+    const newRecipients = [];
+    
+    lines.forEach(line => {
+        // Try to detect tab-separated or comma-separated values
+        const parts = line.split(/[\t,]/).map(part => part.trim()).filter(part => part);
+        
+        if (parts.length >= 2) {
+            // Two or more columns detected
+            let email = '';
+            let name = '';
+            
+            // Determine which part is email vs name
+            parts.forEach(part => {
+                if (part.includes('@') && isValidEmail(part)) {
+                    email = part;
+                } else if (!name) {
+                    name = part;
+                }
+            });
+            
+            if (email) {
+                newRecipients.push({ email: email, name: name || '' });
             }
-
+        } else if (parts.length === 1) {
+            // Single column - check if it's an email
+            const part = parts[0];
+            if (part.includes('@') && isValidEmail(part)) {
+                newRecipients.push({ email: part, name: '' }); // Empty name for now
+            }
+        }
+    });
+    
+    if (newRecipients.length > 0) {
+        // Clear existing empty recipients
+        recipients = recipients.filter(r => r.email.trim() || r.name.trim());
+        
+        // Add new recipients (avoid duplicates)
+        newRecipients.forEach(newRecipient => {
+            if (!recipients.some(r => r.email.toLowerCase() === newRecipient.email.toLowerCase())) {
+                recipients.push(newRecipient);
+            }
+        });
+        
+        // Add new recipients (avoid duplicates)
+        newRecipients.forEach(newRecipient => {
+            if (!recipients.some(r => r.email.toLowerCase() === newRecipient.email.toLowerCase())) {
+                recipients.push(newRecipient);
+            }
         });
 
-
+        // REMOVED: Auto-add empty row
 
         renderRecipients();
-
         updateCountText();
-
-
-
-        showStatus(`Added ${foundEmails.length} email addresses`, 'success');
-
+        
+        renderRecipients();
+        updateCountText();
+        
+        // NOW AUTO-DETECT NAMES FOR NEWLY ADDED EMAILS
+        // Find recipients that have emails but no names and auto-suggest
+        setTimeout(() => {
+            recipients.forEach((recipient, index) => {
+                if (recipient.email && !recipient.name) {
+                    suggestNameForIndex(index, false); // Use your existing function!
+                }
+            });
+        }, 100); // Small delay to ensure UI is rendered
+        
+        const emailCount = newRecipients.filter(r => r.email).length;
+        const nameCount = newRecipients.filter(r => r.name).length;
+        
+        if (nameCount > 0) {
+            showStatus(`Added ${emailCount} emails with ${nameCount} names from paste data`, 'success');
+        } else {
+            showStatus(`Added ${emailCount} email addresses with auto-detected names`, 'success');
+        }
+        
         setTimeout(hideStatus, 3000);
-
     }
+}
 
+// Add this helper function
+function isValidEmail(email) {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
 }
 
 

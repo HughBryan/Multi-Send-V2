@@ -122,7 +122,7 @@ namespace Multi_Send
         }
 
 
-        private void WebView_MessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        private async void WebView_MessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             {
@@ -143,8 +143,8 @@ namespace Multi_Send
 
                 if (message.StartsWith("{"))
                 {
-                    dynamic messageData = JsonConvert.DeserializeObject(message);
-                    string actionName = messageData.action?.ToString() ?? "";
+                    var jObj = JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(message);
+                    string actionName = jObj?["action"]?.ToString() ?? "";
 
                     switch (actionName)
                     {
@@ -153,11 +153,11 @@ namespace Multi_Send
                             break;
 
                         case "duplicateEmail":
-                            _ = Task.Run(async () => await HandleDuplicateEmail(messageData.data));
+                            await HandleDuplicateEmail(jObj["data"]);
                             break;
 
                         case "detectPlaceholder":
-                            _ = Task.Run(async () => await HandleDetectPlaceholder());
+                            await HandleDetectPlaceholder();
                             break;
 
                         default:
@@ -176,21 +176,42 @@ namespace Multi_Send
             }
         }
 
+
         private void SendResponseToJS(string type, string message, object data = null)
         {
             try
             {
                 if (webView?.CoreWebView2 == null) return;
 
-                if (webView.InvokeRequired)
-                {
-                    webView.Invoke(new System.Action(() => SendResponseToJS(type, message, data)));
-                    return;
-                }
-
                 var response = new { type, message, data };
                 string jsonResponse = JsonConvert.SerializeObject(response);
-                webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+
+                // Check if we're on the UI thread
+                if (this.InvokeRequired)
+                {
+                    // We're on a background thread, marshal to UI thread
+                    this.Invoke(new System.Action(() => {
+                        try
+                        {
+                            if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
+                            {
+                                webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"UI thread WebView2 error: {ex.Message}");
+                        }
+                    }));
+                }
+                else
+                {
+                    // We're already on UI thread
+                    if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
+                    {
+                        webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+                    }
+                }
             }
             catch (System.Exception ex)
             {
@@ -202,15 +223,37 @@ namespace Multi_Send
         {
             try
             {
-                if (webView.InvokeRequired)
-                {
-                    webView.Invoke(new System.Action(() => SendProgressToJS(current, total, message)));
-                    return;
-                }
+                if (webView?.CoreWebView2 == null) return;
 
                 var response = new { type = "progress", current, total, message };
                 string jsonResponse = JsonConvert.SerializeObject(response);
-                webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+
+                // Use the same threading logic as SendResponseToJS
+                if (this.InvokeRequired)
+                {
+                    // We're on a background thread, marshal to UI thread
+                    this.Invoke(new System.Action(() => {
+                        try
+                        {
+                            if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
+                            {
+                                webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"UI thread progress error: {ex.Message}");
+                        }
+                    }));
+                }
+                else
+                {
+                    // We're already on UI thread
+                    if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
+                    {
+                        webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+                    }
+                }
             }
             catch (System.Exception ex)
             {
@@ -218,7 +261,7 @@ namespace Multi_Send
             }
         }
 
-        private async Task HandleDuplicateEmail(dynamic requestData)
+        private async Task HandleDuplicateEmail(Newtonsoft.Json.Linq.JToken requestData)
         {
             try
             {
@@ -228,8 +271,8 @@ namespace Multi_Send
                     return;
                 }
 
-                string placeholder = requestData.placeholder;
-                var recipients = JsonConvert.DeserializeObject<List<Recipient>>(requestData.recipients.ToString());
+                string placeholder = requestData["placeholder"]?.ToString() ?? "";
+                var recipients = requestData["recipients"]?.ToObject<List<Recipient>>() ?? new List<Recipient>();
 
                 SendResponseToJS("info", $"Starting duplication for {recipients.Count} recipients...");
 
@@ -258,7 +301,7 @@ namespace Multi_Send
                             $"Creating email {i + 1}/{recipients.Count} for {recipients[i].Name}...");
                         await CreateDuplicateEmail(emailData, placeholder, recipients[i]);
                         successCount++;
-                        await Task.Delay(100);
+                        await Task.Delay(100); // keep UI responsive
                     }
                     catch (System.Exception ex)
                     {
@@ -276,6 +319,10 @@ namespace Multi_Send
                 }
 
                 CleanupTempFiles(emailData.Attachments);
+
+                // Release COM ref
+                if (sourceMailItem != null)
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
             }
             catch (System.Exception ex)
             {
@@ -400,10 +447,10 @@ namespace Multi_Send
                 string text = $"{mailItem.Subject} {mailItem.Body}";
                 var placeholderPatterns = new[]
                 {
-                    @"\{\{[^}]+\}\}",
-                    @"\[[^\]]+\]",
-                    @"\$[A-Za-z_][A-Za-z0-9_]*",
-                };
+            @"\{\{[^}]+\}\}",
+            @"\[[^\]]+\]",
+            @"\$[A-Za-z_][A-Za-z0-9_]*",
+        };
 
                 foreach (var pattern in placeholderPatterns)
                 {
@@ -411,7 +458,8 @@ namespace Multi_Send
                     if (matches.Count > 0)
                     {
                         string detectedPlaceholder = matches[0].Value;
-                        SendResponseToJS("success", $"Detected placeholder: {detectedPlaceholder}", new { placeholder = detectedPlaceholder });
+                        SendResponseToJS("success", $"Detected placeholder: {detectedPlaceholder}",
+                            new { placeholder = detectedPlaceholder });
                         return;
                     }
                 }
@@ -423,6 +471,7 @@ namespace Multi_Send
                 SendResponseToJS("error", $"Error detecting placeholder: {ex.Message}");
             }
         }
+
 
         private void CleanupTempFiles(List<AttachmentData> attachments)
         {
