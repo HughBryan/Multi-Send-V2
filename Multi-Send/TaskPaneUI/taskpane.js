@@ -57,29 +57,99 @@ window.chrome.webview.addEventListener('message', function (event) {
 
 
 function handleBackendResponse(response) {
+    // Clear safety timeout when we receive any response
+    if (window.currentOperationTimeout) {
+        clearTimeout(window.currentOperationTimeout);
+        window.currentOperationTimeout = null;
+    }
+
     if (response.type === 'success') {
         showStatus(response.message, 'success');
-        resetUI(); // Reset UI when operation completes successfully
+        resetUI();
     } else if (response.type === 'error') {
         showStatus(response.message, 'error');
-        resetUI(); // Reset UI when operation fails
+        resetUI();
     } else if (response.type === 'progress') {
         updateProgress(response.current, response.total, response.message);
-        // Don't reset UI during progress updates
     } else if (response.type === 'info') {
         showStatus(response.message, 'info');
-        // Don't reset UI for info messages (like "Starting duplication...")
+    } else if (response.type === 'placeholderWarning') {
+        // Handle placeholder warning - show confirmation dialog
+        handlePlaceholderWarning(response.message, response.data);
     } else if (response.type === 'emailData') {
-        // Handle email data received from backend
         console.log('Received email data:', response.data);
     }
 }
+function handlePlaceholderWarning(message, data) {
+    // Reset UI first
+    resetUI();
 
+    // Show the warning message
+    showStatus(message, 'error');
+
+    // Create confirmation buttons
+    const statusElement = document.getElementById('status');
+
+    // Add confirmation buttons to the status message
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.marginTop = '10px';
+
+    const continueBtn = document.createElement('button');
+    continueBtn.textContent = 'Continue Anyway';
+    continueBtn.className = 'generate-btn';
+    continueBtn.style.marginRight = '10px';
+    continueBtn.style.fontSize = '12px';
+    continueBtn.style.padding = '8px 16px';
+    continueBtn.onclick = () => confirmPlaceholderWarning(data, true);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'clear-all-btn';
+    cancelBtn.style.fontSize = '12px';
+    cancelBtn.style.padding = '8px 16px';
+    cancelBtn.onclick = () => cancelPlaceholderWarning();
+
+    buttonContainer.appendChild(continueBtn);
+    buttonContainer.appendChild(cancelBtn);
+    statusElement.appendChild(buttonContainer);
+}
+
+function confirmPlaceholderWarning(originalData, forceWithoutPlaceholder) {
+    // Clear the warning message
+    hideStatus();
+
+    // Show progress again
+    document.getElementById("progress").classList.add("show");
+    document.getElementById("generateBtn").disabled = true;
+
+    // Add safety timeout again
+    const safetyTimeout = setTimeout(() => {
+        console.warn("No response received within 30 seconds, resetting UI");
+        showStatus("Operation timed out. Please try again.", 'error');
+        resetUI();
+    }, 30000);
+
+    window.currentOperationTimeout = safetyTimeout;
+
+    // Send the request again with forceWithoutPlaceholder flag
+    sendMessageToCS('duplicateEmail', {
+        placeholder: originalData.placeholder,
+        recipients: originalData.recipients,
+        autoSend: originalData.autoSend,
+        forceWithoutPlaceholder: forceWithoutPlaceholder
+    });
+}
+
+function cancelPlaceholderWarning() {
+    // Just hide the warning and reset to normal state
+    hideStatus();
+}
 
 async function generateEmails() {
     try {
         const placeholder = document.getElementById("placeholder").value.trim();
         const filledRecipients = recipients.filter(r => r.email.trim() && r.name.trim());
+        const autoSend = document.getElementById("autoSendCheckbox").checked;
 
         if (filledRecipients.length === 0) {
             showStatus("Please add at least one recipient with both email and name.", 'error');
@@ -90,6 +160,7 @@ async function generateEmails() {
             showStatus("Please enter a placeholder (e.g., {{name}}) that will be replaced with each person's name.", 'error');
             return;
         }
+
 
         // Show progress
         document.getElementById("progress").classList.add("show");
@@ -108,7 +179,8 @@ async function generateEmails() {
         // Send duplication request to C# backend
         sendMessageToCS('duplicateEmail', {
             placeholder: placeholder,
-            recipients: filledRecipients
+            recipients: filledRecipients,
+            autoSend: autoSend  // Pass the auto-send flag to C#
         });
 
     } catch (error) {

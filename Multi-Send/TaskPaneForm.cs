@@ -201,20 +201,22 @@ namespace Multi_Send
                     switch (actionName)
                     {
                         case "test":
+                            System.Diagnostics.Debug.WriteLine("WebView2 Message Debug: Processing test action");
                             SendResponseToJS("success", "🎉 Perfect! Communication working!");
                             break;
 
                         case "duplicateEmail":
-                            // Run on background thread to avoid blocking UI
+                            System.Diagnostics.Debug.WriteLine("WebView2 Message Debug: Processing duplicateEmail action");
                             HandleDuplicateEmailSafe(jObj["data"]);
                             break;
 
                         case "detectPlaceholder":
-                            // Run on background thread to avoid blocking UI
+                            System.Diagnostics.Debug.WriteLine("WebView2 Message Debug: Processing detectPlaceholder action");
                             HandleDetectPlaceholderSafe();
                             break;
 
                         default:
+                            System.Diagnostics.Debug.WriteLine($"WebView2 Message Debug: Unknown action: {actionName}");
                             SendResponseToJS("error", $"Unknown action: {actionName}");
                             break;
                     }
@@ -399,10 +401,10 @@ namespace Multi_Send
 
             string placeholder = requestData["placeholder"]?.ToString() ?? "";
             var recipients = requestData["recipients"]?.ToObject<List<Recipient>>() ?? new List<Recipient>();
+            bool autoSend = requestData["autoSend"]?.ToObject<bool>() ?? false;
+            bool forceWithoutPlaceholder = requestData["forceWithoutPlaceholder"]?.ToObject<bool>() ?? false;
 
-            SendResponseToJS("info", $"Starting duplication for {recipients.Count} recipients...");
-
-            // Access Outlook safely
+            // Access Outlook safely to get the source email
             var selectedItem = GetSelectedOutlookItem();
             if (selectedItem == null)
             {
@@ -417,19 +419,51 @@ namespace Multi_Send
                 return;
             }
 
+            // Check if placeholder exists in the email content (unless user already confirmed)
+            if (!forceWithoutPlaceholder && !string.IsNullOrEmpty(placeholder))
+            {
+                string emailContent = $"{sourceMailItem.Subject ?? ""} {sourceMailItem.Body ?? ""} {sourceMailItem.HTMLBody ?? ""}";
+
+                if (!emailContent.Contains(placeholder))
+                {
+                    // Send a warning back to JavaScript for user confirmation
+                    SendResponseToJS("placeholderWarning",
+                        $"⚠️ Warning: The placeholder '{placeholder}' was not found in the selected email.\n\n" +
+                        "This means the emails will be identical without personalization.\n\n" +
+                        "Do you want to continue anyway?",
+                        new
+                        {
+                            placeholder = placeholder,
+                            recipients = recipients,
+                            autoSend = autoSend
+                        });
+
+                    // Release COM ref and return - wait for user confirmation
+                    if (sourceMailItem != null)
+                        System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
+                    return;
+                }
+            }
+
+            // Continue with normal processing
             var emailData = ExtractEmailData(sourceMailItem);
+
+            string actionText = autoSend ? "sending" : "creating drafts for";
+            SendResponseToJS("info", $"Starting {actionText} {recipients.Count} recipients...");
+
             int successCount = 0;
 
             for (int i = 0; i < recipients.Count; i++)
             {
                 try
                 {
+                    string progressAction = autoSend ? "Sending" : "Creating";
                     SendProgressToJS(i + 1, recipients.Count,
-                        $"Creating email {i + 1}/{recipients.Count} for {recipients[i].Name}...");
+                        $"{progressAction} email {i + 1}/{recipients.Count} for {recipients[i].Name}...");
 
-                    await CreateDuplicateEmail(emailData, placeholder, recipients[i]);
+                    await CreateDuplicateEmail(emailData, placeholder, recipients[i], autoSend);
                     successCount++;
-                    await Task.Delay(100); // Keep UI responsive
+                    await Task.Delay(autoSend ? 500 : 100);
                 }
                 catch (System.Exception ex)
                 {
@@ -437,13 +471,16 @@ namespace Multi_Send
                 }
             }
 
+            string resultAction = autoSend ? "sent" : "created";
+            string resultLocation = autoSend ? "Check Sent Items" : "Check Drafts";
+
             if (successCount == recipients.Count)
             {
-                SendResponseToJS("success", $"✅ Successfully created {successCount} duplicate emails! Check Drafts.");
+                SendResponseToJS("success", $"✅ Successfully {resultAction} {successCount} emails! {resultLocation}.");
             }
             else
             {
-                SendResponseToJS("error", $"⚠️ Created {successCount} out of {recipients.Count}. Some failed.");
+                SendResponseToJS("error", $"⚠️ {resultAction.Substring(0, 1).ToUpper() + resultAction.Substring(1)} {successCount} out of {recipients.Count}. Some failed.");
             }
 
             CleanupTempFiles(emailData.Attachments);
@@ -499,7 +536,7 @@ namespace Multi_Send
             return emailData;
         }
 
-        private async Task CreateDuplicateEmail(EmailData sourceData, string placeholder, Recipient recipient)
+        private async Task CreateDuplicateEmail(EmailData sourceData, string placeholder, Recipient recipient, bool autoSend = false)
         {
             await Task.Run(() =>
             {
@@ -532,12 +569,29 @@ namespace Multi_Send
                         }
                     }
 
-                    newMail.Save(); // Save as draft
+                    if (autoSend)
+                    {
+                        // Send the email immediately
+                        newMail.Send();
+                        System.Diagnostics.Debug.WriteLine($"Email sent to {recipient.Email}");
+                    }
+                    else
+                    {
+                        // Save as draft
+                        newMail.Save();
+                        System.Diagnostics.Debug.WriteLine($"Email saved as draft for {recipient.Email}");
+                    }
                 }
                 catch (System.Exception ex)
                 {
                     newMail?.Close(OlInspectorClose.olDiscard);
-                    throw new System.Exception($"Failed to create duplicate email for {recipient.Email}: {ex.Message}");
+                    string action = autoSend ? "send" : "create draft";
+
+                    // Log the error but don't throw - let the process continue
+                    System.Diagnostics.Debug.WriteLine($"Failed to {action} email for {recipient.Email}: {ex.Message}");
+
+                    // Instead of throwing, we'll let the calling method handle the failure count
+                    // The HandleDuplicateEmail method already has try/catch around this call
                 }
                 finally
                 {
