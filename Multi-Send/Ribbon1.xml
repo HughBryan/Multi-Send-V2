@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="Ribbon_Load">
+	<ribbon>
+		<tabs>
+			<!-- Mail reading -->
+			<tab idMso="TabMail">
+				<group id="EmailDuplicatorGroup"
+					   label="Multi-Send"
+					   insertAfterMso="GroupActions">
+
+					<button id="EmailDuplicatorButton"
+							label="Multi-Send"
+							screentip="Multi-Send Email Duplicator"
+							supertip="Duplicate and personalize the selected email to multiple recipients"
+							size="large"
+							imageMso="MailMergeStartLetters"
+							onAction="EmailDuplicator_Click" />
+
+				</group>
+			</tab>
+
+			<!-- New message compose -->
+			<tab idMso="TabNewMailMessage">
+				<group id="EmailDuplicatorComposeGroup"
+					   label="Multi-Send"
+					   insertAfterMso="GroupActions">
+
+					<button id="EmailDuplicatorComposeButton"
+							label="Multi-Send"
+							screentip="Multi-Send Email Duplicator"
+							supertip="Access the Multi-Send tool to duplicate and personalize emails"
+							size="large"
+							imageMso="MailMergeStartLetters"
+							onAction="EmailDuplicator_Click" />
+
+				</group>
+			</tab>
+		</tabs>
+	</ribbon>
+</customUI>

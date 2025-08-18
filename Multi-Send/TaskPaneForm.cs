@@ -31,8 +31,8 @@ namespace Multi_Send
             this.SuspendLayout();
 
             // UserControl properties
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = AutoScaleMode.Font;
+            this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
+            this.AutoScaleMode = AutoScaleMode.Dpi; // was Font/None
             this.Size = new System.Drawing.Size(400, 600);
             this.Name = "TaskPaneForm";
             this.BackColor = System.Drawing.Color.White;
@@ -501,6 +501,50 @@ namespace Multi_Send
                 return null;
             }
         }
+
+        // Add these methods to your TaskPaneForm class
+
+        private void RefreshWebViewVisuals()
+        {
+            try
+            {
+                // Method 1: Force a layout refresh
+                this.SuspendLayout();
+                webView.Visible = false;
+                webView.Visible = true;
+                this.ResumeLayout(true);
+
+                // Method 2: Force WebView2 to recalculate its bounds
+                if (webView.CoreWebView2 != null)
+                {
+                    // Trigger a bounds recalculation by temporarily changing size
+                    var originalBounds = webView.Bounds;
+                    webView.Bounds = new System.Drawing.Rectangle(
+                        originalBounds.X,
+                        originalBounds.Y,
+                        originalBounds.Width - 1,
+                        originalBounds.Height - 1
+                    );
+
+                    // Restore original bounds
+                    webView.Bounds = originalBounds;
+
+                    // Force a repaint
+                    webView.Invalidate();
+                    webView.Update();
+                }
+
+                System.Diagnostics.Debug.WriteLine("WebView2 visual refresh completed");
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in RefreshWebViewVisuals: {ex.Message}");
+            }
+        }
+
+        // Also add this to handle DPI changes specifically
+
+        // Handle parent changed events
 
         private EmailData ExtractEmailData(MailItem sourceEmail)
         {
