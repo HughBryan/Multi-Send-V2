@@ -45,112 +45,78 @@ function sendMessageToCS(action, data = null) {
 
 // Listen for messages from C# backend
 
-window.addEventListener('message', function (event) {
-
+window.chrome.webview.addEventListener('message', function (event) {
     try {
-
+        console.log('Received message from C#:', event.data);
         const response = JSON.parse(event.data);
-
         handleBackendResponse(response);
-
     } catch (error) {
-
-        console.error('Error handling backend response:', error);
-
+        console.error('Error handling backend response:', error, 'Raw data:', event.data);
     }
-
 });
 
 
-
 function handleBackendResponse(response) {
-
     if (response.type === 'success') {
-
         showStatus(response.message, 'success');
-
+        resetUI(); // Reset UI when operation completes successfully
     } else if (response.type === 'error') {
-
         showStatus(response.message, 'error');
-
+        resetUI(); // Reset UI when operation fails
     } else if (response.type === 'progress') {
-
         updateProgress(response.current, response.total, response.message);
-
+        // Don't reset UI during progress updates
+    } else if (response.type === 'info') {
+        showStatus(response.message, 'info');
+        // Don't reset UI for info messages (like "Starting duplication...")
     } else if (response.type === 'emailData') {
-
         // Handle email data received from backend
-
         console.log('Received email data:', response.data);
-
     }
-
 }
-
 
 
 async function generateEmails() {
-
     try {
-
         const placeholder = document.getElementById("placeholder").value.trim();
-
         const filledRecipients = recipients.filter(r => r.email.trim() && r.name.trim());
 
-
-
         if (filledRecipients.length === 0) {
-
             showStatus("Please add at least one recipient with both email and name.", 'error');
-
             return;
-
         }
-
-
 
         if (!placeholder) {
-
             showStatus("Please enter a placeholder (e.g., {{name}}) that will be replaced with each person's name.", 'error');
-
             return;
-
         }
 
-
-
         // Show progress
-
         document.getElementById("progress").classList.add("show");
-
         document.getElementById("generateBtn").disabled = true;
 
+        // Add a safety timeout to reset UI if no response comes back
+        const safetyTimeout = setTimeout(() => {
+            console.warn("No response received within 30 seconds, resetting UI");
+            showStatus("Operation timed out. Please try again.", 'error');
+            resetUI();
+        }, 30000); // 30 second timeout
 
+        // Store timeout ID so we can clear it when we get a response
+        window.currentOperationTimeout = safetyTimeout;
 
         // Send duplication request to C# backend
-
         sendMessageToCS('duplicateEmail', {
-
             placeholder: placeholder,
-
             recipients: filledRecipients
-
         });
 
-
-
     } catch (error) {
-
         console.error("Error in generateEmails:", error);
-
         showStatus("Error: " + error.message, 'error');
-
         resetUI();
-
     }
-
 }
-
 
 
 function addRecipient() {

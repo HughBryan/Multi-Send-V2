@@ -61,68 +61,120 @@ namespace Multi_Send
             }
         }
 
-        private async void TaskPaneForm_Load(object sender, EventArgs e)
+        private void TaskPaneForm_Load(object sender, EventArgs e)
         {
-            await InitializeWebViewAsync();
+            // Initialize WebView2 directly on UI thread (this event is already on UI thread)
+            InitializeWebViewSafe();
         }
 
-        private async Task InitializeWebViewAsync()
+        private void InitializeWebViewSafe()
         {
+            // Use async void for fire-and-forget from UI thread
+            InitializeWebViewAsync();
+        }
+
+
+
+        private async void InitializeWebViewAsync()
+        {
+            string step = "Starting";
             try
             {
-                // Create a custom user data folder in a writable location
-                string userDataFolder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "EmailDuplicator");
+                step = "Creating user data folder path";
+                string userDataFolder = Path.Combine(Path.GetTempPath(), "EmailDuplicator_WebView2");
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step} - Path: {userDataFolder}");
 
-                Directory.CreateDirectory(userDataFolder);
+                step = "Creating directory";
+                try
+                {
+                    Directory.CreateDirectory(userDataFolder);
+                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Directory created successfully");
+                }
+                catch (System.Exception ex)
+                {
+                    throw new InvalidOperationException($"Cannot create WebView2 user data folder: {ex.Message}");
+                }
 
-                var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                step = "Creating CoreWebView2Environment";
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step}");
+                var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, null);
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Environment created successfully");
+
+                step = "Ensuring CoreWebView2";
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step}");
                 await webView.EnsureCoreWebView2Async(environment);
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: CoreWebView2 ensured successfully");
+
+                step = "Attaching WebMessageReceived event";
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step}");
                 webView.CoreWebView2.WebMessageReceived += WebView_MessageReceived;
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Event attached successfully");
 
+                step = "Determining HTML path";
                 string htmlPath;
-
 #if DEBUG
-                // Always use your dev repo folder when running under F5 / Debug
                 htmlPath = @"C:\Users\hughb\source\repos\Multi-Send\Multi-Send\TaskPaneUI\index.html";
 #else
-        // In published builds, use the add-in deployment folder
         string assemblyDir = Path.GetDirectoryName(
             System.Reflection.Assembly.GetExecutingAssembly().Location);
-        System.Diagnostics.Debug.WriteLine("Add-in loaded from: " + assemblyDir);
-
         htmlPath = Path.Combine(assemblyDir, "TaskPaneUI", "index.html");
 #endif
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: HTML path: {htmlPath}");
 
+                step = "Checking if HTML file exists";
                 if (File.Exists(htmlPath))
                 {
+                    step = "Navigating to HTML file";
+                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step}");
                     htmlFilePath = htmlPath;
-                    string navPath = $"file:///{htmlPath.Replace('\\', '/')}";
-                    System.Diagnostics.Debug.WriteLine("[TaskPaneForm] Loading UI from: " + navPath);
+
+                    // Use Uri for proper file URL formatting
+                    string navPath = new Uri(htmlPath).ToString();
+                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Navigation URL: {navPath}");
+
                     webView.CoreWebView2.Navigate(navPath);
+                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Navigation initiated successfully");
                 }
                 else
                 {
+                    step = "Navigating to error HTML";
+                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step} - File not found: {htmlPath}");
                     string errorHtml = $@"
-                <!DOCTYPE html>
-                <html>
-                <body style='font-family: Segoe UI; padding:20px;'>
-                    <h3>TaskPaneUI\index.html not found</h3>
-                    <p>Expected path: {htmlPath}</p>
-                </body>
-                </html>";
+        <!DOCTYPE html>
+        <html><body style='font-family: Segoe UI; padding:20px;'>
+            <h3>TaskPaneUI\index.html not found</h3>
+            <p>Expected path: {htmlPath}</p>
+        </body></html>";
                     webView.CoreWebView2.NavigateToString(errorHtml);
+                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Error HTML navigation completed");
                 }
+
+                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Initialization completed successfully");
+            }
+            catch (ArgumentException argEx)
+            {
+                string errorMsg = $"WebView2 ArgumentException at step '{step}':\n" +
+                                 $"Message: {argEx.Message}\n" +
+                                 $"Parameter: {argEx.ParamName}\n" +
+                                 $"Stack Trace: {argEx.StackTrace}";
+
+                System.Diagnostics.Debug.WriteLine($"WebView2 Error: {errorMsg}");
+                MessageBox.Show(errorMsg);
             }
             catch (System.Exception ex)
             {
-                MessageBox.Show($"WebView2 init error: {ex.Message}");
+                string errorMsg = $"WebView2 Exception at step '{step}':\n" +
+                                 $"Type: {ex.GetType().Name}\n" +
+                                 $"Message: {ex.Message}\n" +
+                                 $"Stack Trace: {ex.StackTrace}";
+
+                System.Diagnostics.Debug.WriteLine($"WebView2 Error: {errorMsg}");
+                MessageBox.Show(errorMsg);
             }
         }
 
 
-        private async void WebView_MessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        private void WebView_MessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             {
@@ -153,11 +205,13 @@ namespace Multi_Send
                             break;
 
                         case "duplicateEmail":
-                            await HandleDuplicateEmail(jObj["data"]);
+                            // Run on background thread to avoid blocking UI
+                            HandleDuplicateEmailSafe(jObj["data"]);
                             break;
 
                         case "detectPlaceholder":
-                            await HandleDetectPlaceholder();
+                            // Run on background thread to avoid blocking UI
+                            HandleDetectPlaceholderSafe();
                             break;
 
                         default:
@@ -176,157 +230,238 @@ namespace Multi_Send
             }
         }
 
+        // Simplified thread-safe helper methods
+        private void RunOnUIThread(System.Action action)
+        {
+            try
+            {
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(action);
+                }
+                else
+                {
+                    action();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Control was disposed, ignore
+            }
+            catch (InvalidOperationException)
+            {
+                // Handle can be invalid, ignore
+            }
+        }
+
+        private Task InvokeAsync(Func<Task> asyncAction)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new System.Action(() =>
+                {
+                    ExecuteAsyncAction(asyncAction, tcs);
+                }));
+            }
+            else
+            {
+                ExecuteAsyncAction(asyncAction, tcs);
+            }
+
+            return tcs.Task;
+        }
+
+        private void ExecuteAsyncAction(Func<Task> asyncAction, TaskCompletionSource<bool> tcs)
+        {
+            try
+            {
+                var task = asyncAction();
+                task.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        tcs.SetException(t.Exception);
+                    else
+                        tcs.SetResult(true);
+                });
+            }
+            catch (System.Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        }
 
         private void SendResponseToJS(string type, string message, object data = null)
         {
             try
             {
-                if (webView?.CoreWebView2 == null) return;
+                System.Diagnostics.Debug.WriteLine($"WebView2 Response Debug: Preparing response - Type: {type}, Message: {message}");
 
                 var response = new { type, message, data };
                 string jsonResponse = JsonConvert.SerializeObject(response);
 
-                // Check if we're on the UI thread
-                if (this.InvokeRequired)
+                System.Diagnostics.Debug.WriteLine($"WebView2 Response Debug: JSON serialized - Length: {jsonResponse.Length}");
+
+                RunOnUIThread(() =>
                 {
-                    // We're on a background thread, marshal to UI thread
-                    this.Invoke(new System.Action(() => {
-                        try
-                        {
-                            if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
-                            {
-                                webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
-                            }
-                        }
-                        catch (System.Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"UI thread WebView2 error: {ex.Message}");
-                        }
-                    }));
-                }
-                else
-                {
-                    // We're already on UI thread
-                    if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
+                    try
                     {
-                        webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+                        if (webView?.CoreWebView2 != null && !webView.IsDisposed && webView.IsHandleCreated)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"WebView2 Response Debug: Posting message to WebView");
+                            webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+                            System.Diagnostics.Debug.WriteLine($"WebView2 Response Debug: Message posted successfully");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"WebView2 Response Debug: WebView not ready - disposed: {webView?.IsDisposed}, handle: {webView?.IsHandleCreated}");
+                        }
                     }
-                }
+                    catch (System.Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"WebView2 Response Error: {ex.Message}");
+                    }
+                });
             }
             catch (System.Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error sending response to JS: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"WebView2 Response Error in SendResponseToJS: {ex.Message}");
             }
         }
-
         private void SendProgressToJS(int current, int total, string message)
         {
             try
             {
-                if (webView?.CoreWebView2 == null) return;
-
                 var response = new { type = "progress", current, total, message };
                 string jsonResponse = JsonConvert.SerializeObject(response);
 
-                // Use the same threading logic as SendResponseToJS
-                if (this.InvokeRequired)
-                {
-                    // We're on a background thread, marshal to UI thread
-                    this.Invoke(new System.Action(() => {
-                        try
-                        {
-                            if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
-                            {
-                                webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
-                            }
-                        }
-                        catch (System.Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"UI thread progress error: {ex.Message}");
-                        }
-                    }));
-                }
-                else
-                {
-                    // We're already on UI thread
-                    if (!webView.IsDisposed && webView.IsHandleCreated && webView.CoreWebView2 != null)
-                    {
-                        webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
-                    }
-                }
-            }
-            catch (System.Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error sending progress to JS: {ex.Message}");
-            }
-        }
-
-        private async Task HandleDuplicateEmail(Newtonsoft.Json.Linq.JToken requestData)
-        {
-            try
-            {
-                if (outlookApp == null)
-                {
-                    SendResponseToJS("error", "Outlook application not available. Please restart the add-in.");
-                    return;
-                }
-
-                string placeholder = requestData["placeholder"]?.ToString() ?? "";
-                var recipients = requestData["recipients"]?.ToObject<List<Recipient>>() ?? new List<Recipient>();
-
-                SendResponseToJS("info", $"Starting duplication for {recipients.Count} recipients...");
-
-                var selectedItem = outlookApp.ActiveExplorer().Selection;
-                if (selectedItem.Count == 0)
-                {
-                    SendResponseToJS("error", "Please select an email to duplicate.");
-                    return;
-                }
-
-                var sourceMailItem = selectedItem[1] as MailItem;
-                if (sourceMailItem == null)
-                {
-                    SendResponseToJS("error", "Selected item is not an email.");
-                    return;
-                }
-
-                var emailData = ExtractEmailData(sourceMailItem);
-                int successCount = 0;
-
-                for (int i = 0; i < recipients.Count; i++)
+                RunOnUIThread(() =>
                 {
                     try
                     {
-                        SendProgressToJS(i + 1, recipients.Count,
-                            $"Creating email {i + 1}/{recipients.Count} for {recipients[i].Name}...");
-                        await CreateDuplicateEmail(emailData, placeholder, recipients[i]);
-                        successCount++;
-                        await Task.Delay(100); // keep UI responsive
+                        if (webView?.CoreWebView2 != null && !webView.IsDisposed && webView.IsHandleCreated)
+                        {
+                            webView.CoreWebView2.PostWebMessageAsString(jsonResponse);
+                        }
                     }
                     catch (System.Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to create duplicate for {recipients[i].Email}: {ex.Message}");
+                        System.Diagnostics.Debug.WriteLine($"Error sending progress to JS: {ex.Message}");
                     }
-                }
-
-                if (successCount == recipients.Count)
-                {
-                    SendResponseToJS("success", $"✅ Successfully created {successCount} duplicate emails! Check Drafts.");
-                }
-                else
-                {
-                    SendResponseToJS("error", $"⚠️ Created {successCount} out of {recipients.Count}. Some failed.");
-                }
-
-                CleanupTempFiles(emailData.Attachments);
-
-                // Release COM ref
-                if (sourceMailItem != null)
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
+                });
             }
             catch (System.Exception ex)
             {
-                SendResponseToJS("error", $"Duplication failed: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Error in SendProgressToJS: {ex.Message}");
+            }
+        }
+
+        // Safe wrapper methods for background operations
+        private void HandleDuplicateEmailSafe(Newtonsoft.Json.Linq.JToken requestData)
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await HandleDuplicateEmail(requestData);
+                }
+                catch (System.Exception ex)
+                {
+                    SendResponseToJS("error", $"Duplication failed: {ex.Message}");
+                }
+            });
+        }
+
+        private void HandleDetectPlaceholderSafe()
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await HandleDetectPlaceholder();
+                }
+                catch (System.Exception ex)
+                {
+                    SendResponseToJS("error", $"Error detecting placeholder: {ex.Message}");
+                }
+            });
+        }
+
+        // Business logic methods
+        private async Task HandleDuplicateEmail(Newtonsoft.Json.Linq.JToken requestData)
+        {
+            if (outlookApp == null)
+            {
+                SendResponseToJS("error", "Outlook application not available. Please restart the add-in.");
+                return;
+            }
+
+            string placeholder = requestData["placeholder"]?.ToString() ?? "";
+            var recipients = requestData["recipients"]?.ToObject<List<Recipient>>() ?? new List<Recipient>();
+
+            SendResponseToJS("info", $"Starting duplication for {recipients.Count} recipients...");
+
+            // Access Outlook safely
+            var selectedItem = GetSelectedOutlookItem();
+            if (selectedItem == null)
+            {
+                SendResponseToJS("error", "Please select an email to duplicate.");
+                return;
+            }
+
+            var sourceMailItem = selectedItem[1] as MailItem;
+            if (sourceMailItem == null)
+            {
+                SendResponseToJS("error", "Selected item is not an email.");
+                return;
+            }
+
+            var emailData = ExtractEmailData(sourceMailItem);
+            int successCount = 0;
+
+            for (int i = 0; i < recipients.Count; i++)
+            {
+                try
+                {
+                    SendProgressToJS(i + 1, recipients.Count,
+                        $"Creating email {i + 1}/{recipients.Count} for {recipients[i].Name}...");
+
+                    await CreateDuplicateEmail(emailData, placeholder, recipients[i]);
+                    successCount++;
+                    await Task.Delay(100); // Keep UI responsive
+                }
+                catch (System.Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to create duplicate for {recipients[i].Email}: {ex.Message}");
+                }
+            }
+
+            if (successCount == recipients.Count)
+            {
+                SendResponseToJS("success", $"✅ Successfully created {successCount} duplicate emails! Check Drafts.");
+            }
+            else
+            {
+                SendResponseToJS("error", $"⚠️ Created {successCount} out of {recipients.Count}. Some failed.");
+            }
+
+            CleanupTempFiles(emailData.Attachments);
+
+            // Release COM ref
+            if (sourceMailItem != null)
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
+        }
+
+        private Selection GetSelectedOutlookItem()
+        {
+            try
+            {
+                return outlookApp.ActiveExplorer().Selection;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -366,49 +501,52 @@ namespace Multi_Send
 
         private async Task CreateDuplicateEmail(EmailData sourceData, string placeholder, Recipient recipient)
         {
-            MailItem newMail = null;
-            try
+            await Task.Run(() =>
             {
-                newMail = outlookApp.CreateItem(OlItemType.olMailItem) as MailItem;
-
-                newMail.Subject = ReplacePlaceholder(sourceData.Subject, placeholder, recipient.Name);
-                newMail.Body = ReplacePlaceholder(sourceData.Body, placeholder, recipient.Name);
-                newMail.HTMLBody = ReplacePlaceholder(sourceData.HTMLBody, placeholder, recipient.Name);
-                newMail.Importance = sourceData.Importance;
-                newMail.Sensitivity = sourceData.Sensitivity;
-
-                newMail.Recipients.Add(recipient.Email);
-                newMail.Recipients.ResolveAll();
-
-                foreach (var attachmentData in sourceData.Attachments)
+                MailItem newMail = null;
+                try
                 {
-                    try
+                    newMail = outlookApp.CreateItem(OlItemType.olMailItem) as MailItem;
+
+                    newMail.Subject = ReplacePlaceholder(sourceData.Subject, placeholder, recipient.Name);
+                    newMail.Body = ReplacePlaceholder(sourceData.Body, placeholder, recipient.Name);
+                    newMail.HTMLBody = ReplacePlaceholder(sourceData.HTMLBody, placeholder, recipient.Name);
+                    newMail.Importance = sourceData.Importance;
+                    newMail.Sensitivity = sourceData.Sensitivity;
+
+                    newMail.Recipients.Add(recipient.Email);
+                    newMail.Recipients.ResolveAll();
+
+                    foreach (var attachmentData in sourceData.Attachments)
                     {
-                        if (File.Exists(attachmentData.TempFilePath))
+                        try
                         {
-                            newMail.Attachments.Add(attachmentData.TempFilePath, attachmentData.Type, 1, attachmentData.FileName);
+                            if (File.Exists(attachmentData.TempFilePath))
+                            {
+                                newMail.Attachments.Add(attachmentData.TempFilePath, attachmentData.Type, 1, attachmentData.FileName);
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Failed to add attachment {attachmentData.FileName}: {ex.Message}");
                         }
                     }
-                    catch (System.Exception ex)
+
+                    newMail.Save(); // Save as draft
+                }
+                catch (System.Exception ex)
+                {
+                    newMail?.Close(OlInspectorClose.olDiscard);
+                    throw new System.Exception($"Failed to create duplicate email for {recipient.Email}: {ex.Message}");
+                }
+                finally
+                {
+                    if (newMail != null)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to add attachment {attachmentData.FileName}: {ex.Message}");
+                        System.Runtime.InteropServices.Marshal.ReleaseComObject(newMail);
                     }
                 }
-
-                newMail.Save(); // Save as draft
-            }
-            catch (System.Exception ex)
-            {
-                newMail?.Close(OlInspectorClose.olDiscard);
-                throw new System.Exception($"Failed to create duplicate email for {recipient.Email}: {ex.Message}");
-            }
-            finally
-            {
-                if (newMail != null)
-                {
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(newMail);
-                }
-            }
+            });
         }
 
         private string ReplacePlaceholder(string text, string placeholder, string replacement)
@@ -422,56 +560,49 @@ namespace Multi_Send
 
         private async Task HandleDetectPlaceholder()
         {
-            try
+            if (outlookApp == null)
             {
-                if (outlookApp == null)
-                {
-                    SendResponseToJS("error", "Outlook application not available.");
-                    return;
-                }
-
-                var selectedItem = outlookApp.ActiveExplorer().Selection;
-                if (selectedItem.Count == 0)
-                {
-                    SendResponseToJS("error", "Please select an email to detect placeholder from.");
-                    return;
-                }
-
-                var mailItem = selectedItem[1] as MailItem;
-                if (mailItem == null)
-                {
-                    SendResponseToJS("error", "Selected item is not an email.");
-                    return;
-                }
-
-                string text = $"{mailItem.Subject} {mailItem.Body}";
-                var placeholderPatterns = new[]
-                {
-            @"\{\{[^}]+\}\}",
-            @"\[[^\]]+\]",
-            @"\$[A-Za-z_][A-Za-z0-9_]*",
-        };
-
-                foreach (var pattern in placeholderPatterns)
-                {
-                    var matches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase);
-                    if (matches.Count > 0)
-                    {
-                        string detectedPlaceholder = matches[0].Value;
-                        SendResponseToJS("success", $"Detected placeholder: {detectedPlaceholder}",
-                            new { placeholder = detectedPlaceholder });
-                        return;
-                    }
-                }
-
-                SendResponseToJS("info", "No common placeholder patterns found. Try {{name}} or [name].");
+                SendResponseToJS("error", "Outlook application not available.");
+                return;
             }
-            catch (System.Exception ex)
+
+            // Access Outlook safely
+            var selectedItem = GetSelectedOutlookItem();
+            if (selectedItem == null || selectedItem.Count == 0)
             {
-                SendResponseToJS("error", $"Error detecting placeholder: {ex.Message}");
+                SendResponseToJS("error", "Please select an email to detect placeholder from.");
+                return;
             }
+
+            var mailItem = selectedItem[1] as MailItem;
+            if (mailItem == null)
+            {
+                SendResponseToJS("error", "Selected item is not an email.");
+                return;
+            }
+
+            string text = $"{mailItem.Subject} {mailItem.Body}";
+            var placeholderPatterns = new[]
+            {
+                @"\{\{[^}]+\}\}",
+                @"\[[^\]]+\]",
+                @"\$[A-Za-z_][A-Za-z0-9_]*",
+            };
+
+            foreach (var pattern in placeholderPatterns)
+            {
+                var matches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase);
+                if (matches.Count > 0)
+                {
+                    string detectedPlaceholder = matches[0].Value;
+                    SendResponseToJS("success", $"Detected placeholder: {detectedPlaceholder}",
+                        new { placeholder = detectedPlaceholder });
+                    return;
+                }
+            }
+
+            SendResponseToJS("info", "No common placeholder patterns found. Try {{name}} or [name].");
         }
-
 
         private void CleanupTempFiles(List<AttachmentData> attachments)
         {
@@ -493,7 +624,11 @@ namespace Multi_Send
         {
             if (disposing)
             {
-                webView?.Dispose();
+                try
+                {
+                    webView?.Dispose();
+                }
+                catch { /* ignore disposal errors */ }
             }
             base.Dispose(disposing);
         }
