@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Windows.Forms;
 using Microsoft.Office.Tools;
 using Outlook = Microsoft.Office.Interop.Outlook;
-using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace Multi_Send
@@ -15,9 +14,6 @@ namespace Multi_Send
 
         // Track task panes for inspector windows (compose/reply/forward)
         private Dictionary<Outlook.Inspector, Microsoft.Office.Tools.CustomTaskPane> inspectorTaskPanes;
-
-        // Shared visibility state - this keeps all task panes in sync
-        private bool isTaskPaneVisible = false;
 
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
@@ -102,30 +98,14 @@ namespace Multi_Send
 
         private void CreateInspectorTaskPane(Outlook.Inspector inspector)
         {
-            try
-            {
-                // Don't create duplicate task panes
-                if (inspectorTaskPanes.ContainsKey(inspector))
-                    return;
+            if (inspectorTaskPanes.ContainsKey(inspector)) return;
 
-                // Create a new task pane form for this inspector
-                var inspectorTaskPaneForm = new TaskPaneForm();
-                var inspectorCustomTaskPane = this.CustomTaskPanes.Add(inspectorTaskPaneForm, "Multi-Send", inspector);
+            var inspectorTaskPaneForm = new TaskPaneForm();
+            var inspectorCustomTaskPane = this.CustomTaskPanes.Add(inspectorTaskPaneForm, "Multi-Send", inspector);
+            inspectorCustomTaskPane.Width = 500;
+            inspectorCustomTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
 
-                // Use the shared visibility state and ensure proper positioning
-                inspectorCustomTaskPane.Visible = isTaskPaneVisible;
-                inspectorCustomTaskPane.Width = 400;
-                inspectorCustomTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
-
-                // Store the task pane reference
-                inspectorTaskPanes[inspector] = inspectorCustomTaskPane;
-
-                System.Diagnostics.Debug.WriteLine($"Created inspector task pane for new window");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error creating inspector task pane: {ex.Message}");
-            }
+            inspectorTaskPanes[inspector] = inspectorCustomTaskPane;
         }
 
         private void Inspector_Close(Outlook.Inspector inspector)
@@ -158,7 +138,7 @@ namespace Multi_Send
             {
                 taskPane = new TaskPaneForm();
                 customTaskPane = this.CustomTaskPanes.Add(taskPane, "Multi-Send");
-                customTaskPane.Visible = isTaskPaneVisible; // Use shared state
+                customTaskPane.Visible = customTaskPane?.Visible ?? false; // or leave default false
                 customTaskPane.Width = 400;
                 customTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
             }

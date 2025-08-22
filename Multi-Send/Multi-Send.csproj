@@ -109,9 +109,7 @@
     <Reference Include="Microsoft.Web.WebView2.WinForms, Version=1.0.3405.78, Culture=neutral, PublicKeyToken=2a8ab48044d2601e, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Web.WebView2.1.0.3405.78\lib\net462\Microsoft.Web.WebView2.WinForms.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.Web.WebView2.Wpf, Version=1.0.3405.78, Culture=neutral, PublicKeyToken=2a8ab48044d2601e, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Web.WebView2.1.0.3405.78\lib\net462\Microsoft.Web.WebView2.Wpf.dll</HintPath>
-    </Reference>
+
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
@@ -201,48 +199,48 @@
     The "AppDesigner" element specifies the directory where the application properties files
     can be found.
   -->
-	<ItemGroup>
-		<Compile Include="Properties\AssemblyInfo.cs">
-			<SubType>Code</SubType>
-		</Compile>
-		<EmbeddedResource Include="Properties\Resources.resx">
-			<Generator>ResXFileCodeGenerator</Generator>
-			<LastGenOutput>Resources.Designer.cs</LastGenOutput>
-			<SubType>Designer</SubType>
-		</EmbeddedResource>
-		<Compile Include="Properties\Resources.Designer.cs">
-			<AutoGen>True</AutoGen>
-			<DependentUpon>Resources.resx</DependentUpon>
-		</Compile>
-		<None Include="Multi-Send_TemporaryKey.pfx" />
-		<None Include="packages.config" />
-		<None Include="Properties\Settings.settings">
-			<Generator>SettingsSingleFileGenerator</Generator>
-			<LastGenOutput>Settings.Designer.cs</LastGenOutput>
-		</None>
-		<Compile Include="Properties\Settings.Designer.cs">
-			<AutoGen>True</AutoGen>
-			<DependentUpon>Settings.settings</DependentUpon>
-		</Compile>
-		<Compile Include="Ribbon1.cs">
-			<SubType>Code</SubType>
-		</Compile>
-		<Compile Include="TaskPaneForm.cs">
-			<SubType>UserControl</SubType>
-		</Compile>
-		<Compile Include="ThisAddIn.cs">
-			<SubType>Code</SubType>
-		</Compile>
-		<None Include="ThisAddIn.Designer.xml">
-			<DependentUpon>ThisAddIn.cs</DependentUpon>
-		</None>
-		<Compile Include="ThisAddIn.Designer.cs">
-			<DependentUpon>ThisAddIn.Designer.xml</DependentUpon>
-		</Compile>
-		<AppDesigner Include="Properties\" />
-		<EmbeddedResource Include="Ribbon1.xml" />
-	</ItemGroup>
-	<ItemGroup>
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <None Include="Multi-Send_TemporaryKey.pfx" />
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+    <Compile Include="Ribbon1.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TaskPaneForm.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="ThisAddIn.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <None Include="ThisAddIn.Designer.xml">
+      <DependentUpon>ThisAddIn.cs</DependentUpon>
+    </None>
+    <Compile Include="ThisAddIn.Designer.cs">
+      <DependentUpon>ThisAddIn.Designer.xml</DependentUpon>
+    </Compile>
+    <AppDesigner Include="Properties\" />
+    <EmbeddedResource Include="Ribbon1.xml" />
+  </ItemGroup>
+  <ItemGroup>
     <Content Include="TaskPaneUI\index.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <IncludeInVSTO>true</IncludeInVSTO>

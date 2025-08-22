@@ -22,8 +22,7 @@ namespace Multi_Send
             InitializeComponent();
             InitializeOutlookApp();
 
-            // Initialize WebView when the control is actually loaded
-            this.Load += TaskPaneForm_Load;
+             this.Load += TaskPaneForm_Load;
         }
 
         private void InitializeComponent()
@@ -33,7 +32,7 @@ namespace Multi_Send
             // UserControl properties
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
             this.AutoScaleMode = AutoScaleMode.Dpi; // was Font/None
-            this.Size = new System.Drawing.Size(400, 600);
+            this.Size = new System.Drawing.Size(500, 600);
             this.Name = "TaskPaneForm";
             this.BackColor = System.Drawing.Color.White;
 
@@ -103,6 +102,18 @@ namespace Multi_Send
                 step = "Ensuring CoreWebView2";
                 System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step}");
                 await webView.EnsureCoreWebView2Async(environment);
+
+                // Harden WebView2 BEFORE any Navigate(...)
+                webView.CoreWebView2.NavigationStarting += (s, e) =>
+                {
+                    var uri = e.Uri ?? "";
+                    if (!uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase) &&
+                        uri != "about:blank")
+                        e.Cancel = true;
+                };
+                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                webView.CoreWebView2.Settings.AreDevToolsEnabled = false; // set true if you need devtools in DEBUG
+
                 System.Diagnostics.Debug.WriteLine($"WebView2 Debug: CoreWebView2 ensured successfully");
 
                 step = "Attaching WebMessageReceived event";
@@ -112,13 +123,14 @@ namespace Multi_Send
 
                 step = "Determining HTML path";
                 string htmlPath;
-#if DEBUG
+
+
+
                 htmlPath = @"C:\Users\hughb\source\repos\Multi-Send\Multi-Send\TaskPaneUI\index.html";
-#else
         string assemblyDir = Path.GetDirectoryName(
             System.Reflection.Assembly.GetExecutingAssembly().Location);
         htmlPath = Path.Combine(assemblyDir, "TaskPaneUI", "index.html");
-#endif
+
                 System.Diagnostics.Debug.WriteLine($"WebView2 Debug: HTML path: {htmlPath}");
 
                 step = "Checking if HTML file exists";
@@ -502,50 +514,6 @@ namespace Multi_Send
             }
         }
 
-        // Add these methods to your TaskPaneForm class
-
-        private void RefreshWebViewVisuals()
-        {
-            try
-            {
-                // Method 1: Force a layout refresh
-                this.SuspendLayout();
-                webView.Visible = false;
-                webView.Visible = true;
-                this.ResumeLayout(true);
-
-                // Method 2: Force WebView2 to recalculate its bounds
-                if (webView.CoreWebView2 != null)
-                {
-                    // Trigger a bounds recalculation by temporarily changing size
-                    var originalBounds = webView.Bounds;
-                    webView.Bounds = new System.Drawing.Rectangle(
-                        originalBounds.X,
-                        originalBounds.Y,
-                        originalBounds.Width - 1,
-                        originalBounds.Height - 1
-                    );
-
-                    // Restore original bounds
-                    webView.Bounds = originalBounds;
-
-                    // Force a repaint
-                    webView.Invalidate();
-                    webView.Update();
-                }
-
-                System.Diagnostics.Debug.WriteLine("WebView2 visual refresh completed");
-            }
-            catch (System.Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error in RefreshWebViewVisuals: {ex.Message}");
-            }
-        }
-
-        // Also add this to handle DPI changes specifically
-
-        // Handle parent changed events
-
         private EmailData ExtractEmailData(MailItem sourceEmail)
         {
             var emailData = new EmailData
@@ -562,7 +530,8 @@ namespace Multi_Send
             {
                 try
                 {
-                    string tempPath = Path.Combine(Path.GetTempPath(), $"EmailDup_{Guid.NewGuid()}_{attachment.FileName}");
+                    var safeName = Path.GetFileName(attachment.FileName); // strips any dirs
+                    string tempPath = Path.Combine(Path.GetTempPath(), $"EmailDup_{Guid.NewGuid()}_{safeName}");
                     attachment.SaveAsFile(tempPath);
                     emailData.Attachments.Add(new AttachmentData
                     {

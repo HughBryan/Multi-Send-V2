@@ -7,11 +7,14 @@ let recipients = [];
 // Initialize the taskpane
 
 document.addEventListener('DOMContentLoaded', function () {
-    // Start with no recipients - users can add them manually or paste
     updateCountText();
     setupPasteHandler();
-    renderRecipients(); // Render empty list
-});
+    renderRecipients();
+
+    document.querySelector('.add-email-btn')?.addEventListener('click', addRecipient);
+    document.getElementById('clearAllBtn')?.addEventListener('click', clearAllAndReset);
+    document.getElementById('generateBtn')?.addEventListener('click', generateEmails);
+}); 
 
 
 
@@ -40,7 +43,6 @@ function sendMessageToCS(action, data = null) {
     }
 
 }
-
 
 
 // Listen for messages from C# backend
@@ -217,33 +219,52 @@ function removeRecipient(index) {
 
 
 
+// Replace renderRecipients() body with safe DOM creation
 function renderRecipients() {
     const emailList = document.getElementById('emailList');
     emailList.innerHTML = '';
-
-    recipients.forEach((recipient, index) => {
+    recipients.forEach((r, i) => {
         const row = document.createElement('div');
         row.className = 'email-input-row';
 
-        row.innerHTML = `
-            <input type="email" 
-                   class="email-input" 
-                   placeholder="email@example.com"
-                   value="${recipient.email}"
-                   oninput="updateRecipient(${index}, 'email', this.value); autoDetectName(${index});">
-            <input type="text" 
-                   class="name-input" 
-                   placeholder="Name"
-                   value="${recipient.name}"
-                   oninput="updateRecipient(${index}, 'name', this.value)">
-            <button class="suggest-btn" onclick="suggestName(${index})">Auto</button>
-            <button class="remove-btn" onclick="removeRecipient(${index})">×</button>
-        `;
+        const email = document.createElement('input');
+        email.type = 'email';
+        email.className = 'email-input';
+        email.placeholder = 'email@example.com';
+        email.value = r.email || '';
+        email.oninput = () => { updateRecipient(i, 'email', email.value); autoDetectName(i); };
 
+        const name = document.createElement('input');
+        name.type = 'text';
+        name.className = 'name-input';
+        name.placeholder = 'Name';
+        name.value = r.name || '';
+        name.oninput = () => updateRecipient(i, 'name', name.value);
+
+        const autoBtn = document.createElement('button');
+        autoBtn.className = 'suggest-btn';
+        autoBtn.textContent = 'Auto';
+        autoBtn.onclick = () => suggestName(i);
+
+        const rm = document.createElement('button');
+        rm.className = 'remove-btn';
+        rm.textContent = '×';
+        rm.onclick = () => removeRecipient(i);
+
+        row.append(email, name, autoBtn, rm);
         emailList.appendChild(row);
     });
 }
 
+let autoDetectTimeouts = {};
+function autoDetectName(index) {
+    clearTimeout(autoDetectTimeouts[index]);
+    autoDetectTimeouts[index] = setTimeout(() => {
+        if (recipients[index]?.email && !recipients[index]?.name) {
+            suggestNameForIndex(index, false);
+        }
+    }, 300);
+}
 
 function updateRecipient(index, field, value) {
 
@@ -323,15 +344,6 @@ function updateCountText() {
 
 
 
-function detectPlaceholder() {
-
-    // Send request to C# to detect placeholder in current email
-
-    sendMessageToCS('detectPlaceholder');
-
-}
-
-
 
 function setupPasteHandler() {
     document.addEventListener('paste', function (e) {
@@ -354,79 +366,70 @@ function setupPasteHandler() {
 
 
 function processPastedEmails(text) {
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
-    const newRecipients = [];
-    
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const parsed = [];
+
     lines.forEach(line => {
-        // Try to detect tab-separated or comma-separated values
-        const parts = line.split(/[\t,]/).map(part => part.trim()).filter(part => part);
-        
+        const parts = line.split(/[\t,]/).map(p => p.trim()).filter(Boolean);
+
         if (parts.length >= 2) {
-            // Two or more columns detected
             let email = '';
             let name = '';
-            
-            // Determine which part is email vs name
             parts.forEach(part => {
-                if (part.includes('@') && isValidEmail(part)) {
-                    email = part;
-                } else if (!name) {
-                    name = part;
-                }
+                if (!email && part.includes('@') && isValidEmail(part)) email = part;
+                else if (!name) name = part;
             });
-            
-            if (email) {
-                newRecipients.push({ email: email, name: name || '' });
-            }
+            if (email) parsed.push({ email, name: name || '' });
         } else if (parts.length === 1) {
-            // Single column - check if it's an email
             const part = parts[0];
             if (part.includes('@') && isValidEmail(part)) {
-                newRecipients.push({ email: part, name: '' }); // Empty name for now
+                parsed.push({ email: part, name: '' });
             }
         }
     });
-    
-    if (newRecipients.length > 0) {
-        // Clear existing empty recipients
-        recipients = recipients.filter(r => r.email.trim() || r.name.trim());
-        
-        
-        // Add new recipients (avoid duplicates)
-        newRecipients.forEach(newRecipient => {
-            if (!recipients.some(r => r.email.toLowerCase() === newRecipient.email.toLowerCase())) {
-                recipients.push(newRecipient);
+
+    if (parsed.length === 0) return;
+
+    // Keep only non-empty existing recipients
+    recipients = recipients.filter(r => r.email.trim() || r.name.trim());
+
+    // Add unique emails only
+    const existing = new Set(recipients.map(r => (r.email || '').toLowerCase()));
+    let added = 0;
+    let addedWithNames = 0;
+
+    parsed.forEach(nr => {
+        const key = (nr.email || '').toLowerCase();
+        if (key && !existing.has(key)) {
+            recipients.push(nr);
+            existing.add(key);
+            added++;
+            if (nr.name) addedWithNames++;
+        }
+    });
+
+    renderRecipients();
+    updateCountText();
+
+    // Auto-suggest names where missing
+    setTimeout(() => {
+        recipients.forEach((r, i) => {
+            if (r.email && !r.name) {
+                suggestNameForIndex(i, false);
             }
         });
+    }, 100);
 
-        
-        renderRecipients();
-        updateCountText();
-        
-        // NOW AUTO-DETECT NAMES FOR NEWLY ADDED EMAILS
-        // Find recipients that have emails but no names and auto-suggest
-        setTimeout(() => {
-            recipients.forEach((recipient, index) => {
-                if (recipient.email && !recipient.name) {
-                    suggestNameForIndex(index, false); // Use your existing function!
-                }
-            });
-        }, 100); // Small delay to ensure UI is rendered
-        
-        const emailCount = newRecipients.filter(r => r.email).length;
-        const nameCount = newRecipients.filter(r => r.name).length;
-        
-        if (nameCount > 0) {
-            showStatus(`Added ${emailCount} emails with ${nameCount} names from paste data`, 'success');
+    if (added > 0) {
+        if (addedWithNames > 0) {
+            showStatus(`Added ${added} recipients (${addedWithNames} with names)`, 'success');
         } else {
-            showStatus(`Added ${emailCount} email addresses with auto-detected names`, 'success');
+            showStatus(`Added ${added} recipients`, 'success');
         }
-        
         setTimeout(hideStatus, 3000);
     }
 }
 
-// Add this helper function
 function isValidEmail(email) {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return emailRegex.test(email);
