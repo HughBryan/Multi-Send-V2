@@ -1,20 +1,20 @@
-﻿using System;
+﻿using Microsoft.Office.Interop.Outlook;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.Web.WebView2.WinForms;
-using Microsoft.Web.WebView2.Core;
-using Microsoft.Office.Interop.Outlook;
-using Newtonsoft.Json;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
 
 namespace Multi_Send
 {
     public partial class TaskPaneForm : UserControl
     {
         private WebView2 webView;
-        private string htmlFilePath;
         private Microsoft.Office.Interop.Outlook.Application outlookApp;
 
         public TaskPaneForm()
@@ -107,8 +107,10 @@ namespace Multi_Send
                 webView.CoreWebView2.NavigationStarting += (s, e) =>
                 {
                     var uri = e.Uri ?? "";
+                    // Allow file:// URLs, about:blank, and data: URLs (for NavigateToString)
                     if (!uri.StartsWith("file://", StringComparison.OrdinalIgnoreCase) &&
-                        uri != "about:blank")
+                        uri != "about:blank" &&
+                        !uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
                         e.Cancel = true;
                 };
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
@@ -121,44 +123,56 @@ namespace Multi_Send
                 webView.CoreWebView2.WebMessageReceived += WebView_MessageReceived;
                 System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Event attached successfully");
 
-                step = "Determining HTML path";
-                string htmlPath;
-
-
-
-                htmlPath = @"C:\Users\hughb\source\repos\Multi-Send\Multi-Send\TaskPaneUI\index.html";
-        string assemblyDir = Path.GetDirectoryName(
-            System.Reflection.Assembly.GetExecutingAssembly().Location);
-        htmlPath = Path.Combine(assemblyDir, "TaskPaneUI", "index.html");
-
-                System.Diagnostics.Debug.WriteLine($"WebView2 Debug: HTML path: {htmlPath}");
-
-                step = "Checking if HTML file exists";
-                if (File.Exists(htmlPath))
+                step = "Loading embedded TaskPaneUI resources";
+                
+                try
                 {
-                    step = "Navigating to HTML file";
-                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step}");
-                    htmlFilePath = htmlPath;
-
-                    // Use Uri for proper file URL formatting
-                    string navPath = new Uri(htmlPath).ToString();
-                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Navigation URL: {navPath}");
-
-                    webView.CoreWebView2.Navigate(navPath);
-                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Navigation initiated successfully");
+                    // Get the assembly and list all embedded resources
+                    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                    var allResources = assembly.GetManifestResourceNames();
+                    
+                    // Get embedded resources
+                    string htmlContent = GetEmbeddedResourceContent(assembly, "Multi_Send.TaskPaneUI.index.html");
+                    string cssContent = GetEmbeddedResourceContent(assembly, "Multi_Send.TaskPaneUI.taskpane.css");
+                    string jsContent = GetEmbeddedResourceContent(assembly, "Multi_Send.TaskPaneUI.taskpane.js");
+                    
+                    // Fix Content Security Policy to allow inline styles
+                    string cspFixed = System.Text.RegularExpressions.Regex.Replace(
+                        htmlContent,
+                        @"style-src\s+'self'",
+                        "style-src 'self' 'unsafe-inline'",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        
+                    // Inject CSS and JS inline
+                    string finalHtml = System.Text.RegularExpressions.Regex.Replace(
+                        cspFixed,
+                        @"<link\s+rel=[""']stylesheet[""']\s+href=[""']taskpane\.css[""']\s*/>",
+                        $"<style>{cssContent}</style>",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        
+                    finalHtml = System.Text.RegularExpressions.Regex.Replace(
+                        finalHtml,
+                        @"<script\s+src=[""']taskpane\.js[""']\s*></script>",
+                        $"<script>{jsContent}</script>",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    
+                    webView.CoreWebView2.NavigateToString(finalHtml);
+                    System.Diagnostics.Debug.WriteLine("WebView2 Debug: Loaded embedded TaskPaneUI successfully");
                 }
-                else
+                catch (System.Exception ex)
                 {
-                    step = "Navigating to error HTML";
-                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: {step} - File not found: {htmlPath}");
-                    string errorHtml = $@"
-        <!DOCTYPE html>
-        <html><body style='font-family: Segoe UI; padding:20px;'>
-            <h3>TaskPaneUI\index.html not found</h3>
-            <p>Expected path: {htmlPath}</p>
-        </body></html>";
-                    webView.CoreWebView2.NavigateToString(errorHtml);
-                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Error HTML navigation completed");
+                    System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Error loading embedded resources: {ex.Message}");
+                    
+                    // Fallback minimal HTML
+                    string fallbackHtml = @"
+                        <!DOCTYPE html>
+                        <html><body style='font-family: Segoe UI; padding:20px;'>
+                            <h3>Multi-Send TaskPane</h3>
+                            <p>Error loading embedded UI resources. Please rebuild the add-in.</p>
+                            <p>Error: " + ex.Message + @"</p>
+                        </body></html>";
+                    
+                    webView.CoreWebView2.NavigateToString(fallbackHtml);
                 }
 
                 System.Diagnostics.Debug.WriteLine($"WebView2 Debug: Initialization completed successfully");
@@ -185,6 +199,21 @@ namespace Multi_Send
             }
         }
 
+        private string GetEmbeddedResourceContent(System.Reflection.Assembly assembly, string resourceName)
+        {
+            System.Diagnostics.Debug.WriteLine($"Looking for embedded resource: {resourceName}");
+
+            using (var stream = assembly.GetManifestResourceStream(resourceName))
+            {
+                if (stream == null)
+                    throw new System.Exception($"Embedded resource '{resourceName}' not found");
+
+                using (var reader = new StreamReader(stream))
+                {
+                    return reader.ReadToEnd();
+                }
+            }
+        }
 
         private void WebView_MessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {

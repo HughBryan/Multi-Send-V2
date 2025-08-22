@@ -138,7 +138,7 @@ namespace Multi_Send
             {
                 taskPane = new TaskPaneForm();
                 customTaskPane = this.CustomTaskPanes.Add(taskPane, "Multi-Send");
-                customTaskPane.Visible = customTaskPane?.Visible ?? false; // or leave default false
+                customTaskPane.Visible = false;
                 customTaskPane.Width = 400;
                 customTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
             }
