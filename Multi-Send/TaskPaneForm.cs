@@ -16,13 +16,28 @@ namespace Multi_Send
     {
         private WebView2 webView;
         private Microsoft.Office.Interop.Outlook.Application outlookApp;
+        private Microsoft.Office.Interop.Outlook.Inspector inspector; // NEW: Track inspector context
+        private bool isInspectorMode; // NEW: Flag to know if we're in compose mode
 
         public TaskPaneForm()
         {
+            System.Diagnostics.Debug.WriteLine("DEBUG: TaskPaneForm() - Default constructor called (Explorer mode)");
             InitializeComponent();
             InitializeOutlookApp();
+            this.isInspectorMode = false; // Default to Explorer mode
+            this.Load += TaskPaneForm_Load;
+        }
 
-             this.Load += TaskPaneForm_Load;
+        // NEW: Constructor for Inspector mode
+        public TaskPaneForm(Microsoft.Office.Interop.Outlook.Inspector inspector)
+        {
+            System.Diagnostics.Debug.WriteLine("DEBUG: TaskPaneForm(Inspector) - Inspector constructor called");
+            InitializeComponent();
+            InitializeOutlookApp();
+            this.inspector = inspector;
+            this.isInspectorMode = true;
+            this.Load += TaskPaneForm_Load;
+            System.Diagnostics.Debug.WriteLine($"DEBUG: Inspector constructor completed - isInspectorMode: {this.isInspectorMode}");
         }
 
         private void InitializeComponent()
@@ -440,36 +455,94 @@ namespace Multi_Send
                 return;
             }
 
+            // DEBUG: Add logging to see what mode we're in
+            System.Diagnostics.Debug.WriteLine($"DEBUG: HandleDuplicateEmail - isInspectorMode: {isInspectorMode}");
+            System.Diagnostics.Debug.WriteLine($"DEBUG: inspector is null: {inspector == null}");
+
             string placeholder = requestData["placeholder"]?.ToString() ?? "";
             var recipients = requestData["recipients"]?.ToObject<List<Recipient>>() ?? new List<Recipient>();
             bool autoSend = requestData["autoSend"]?.ToObject<bool>() ?? false;
             bool forceWithoutPlaceholder = requestData["forceWithoutPlaceholder"]?.ToObject<bool>() ?? false;
 
-            // Access Outlook safely to get the source email
-            var selectedItem = GetSelectedOutlookItem();
-            if (selectedItem == null)
+            // Get the source email based on context
+            MailItem sourceMailItem = null;
+            
+            if (isInspectorMode && inspector != null)
             {
-                SendResponseToJS("error", "Please select an email to duplicate.");
+                System.Diagnostics.Debug.WriteLine("DEBUG: Using Inspector mode - getting CurrentItem");
+                // In compose mode - use the current item
+                sourceMailItem = inspector.CurrentItem as MailItem;
+                if (sourceMailItem == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("DEBUG: Inspector CurrentItem is null or not a MailItem");
+                    SendResponseToJS("error", "Current item is not an email.");
+                    return;
+                }
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Got Inspector MailItem - Subject: {sourceMailItem.Subject}");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("DEBUG: Using Explorer mode - getting Selection");
+                // In Explorer mode - use selected item
+                var selectedItem = GetSelectedOutlookItem() as Selection;
+                if (selectedItem == null || selectedItem.Count == 0)
+                {
+                    SendResponseToJS("error", "Please select an email to duplicate.");
+                    return;
+                }
+
+                sourceMailItem = selectedItem[1] as MailItem;
+                if (sourceMailItem == null)
+                {
+                    SendResponseToJS("error", "Selected item is not an email.");
+                    return;
+                }
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Got Explorer MailItem - Subject: {sourceMailItem.Subject}");
+            }
+
+            // SAFETY CHECK: Ensure we're working with an unsent email (compose mode)
+            try
+            {
+                if (sourceMailItem.Sent)
+                {
+                    SendResponseToJS("error", "🚫 SAFETY: This email has already been sent. Multi-Send only works with drafts you're composing.");
+                    if (!isInspectorMode && sourceMailItem != null)
+                        System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
+                    return;
+                }
+                
+                // Additional safety for Explorer mode
+                if (!isInspectorMode && sourceMailItem.Recipients.Count > 0)
+                {
+                    SendResponseToJS("error", "�� SAFETY: Please use Multi-Send from compose windows, not from received emails.");
+                    if (sourceMailItem != null)
+                        System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
+                    return;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                SendResponseToJS("error", $"🚫 SAFETY: Unable to verify email safety. {ex.Message}");
+                if (!isInspectorMode && sourceMailItem != null)
+                    System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
                 return;
             }
 
-            var sourceMailItem = selectedItem[1] as MailItem;
-            if (sourceMailItem == null)
-            {
-                SendResponseToJS("error", "Selected item is not an email.");
-                return;
-            }
+            System.Diagnostics.Debug.WriteLine($"DEBUG: SAFETY PASSED - Email is safe to duplicate (Sent: {sourceMailItem.Sent})");
 
-            // Check if placeholder exists in the email content (unless user already confirmed)
+            // Continue with existing placeholder detection logic...
             if (!forceWithoutPlaceholder && !string.IsNullOrEmpty(placeholder))
             {
                 string emailContent = $"{sourceMailItem.Subject ?? ""} {sourceMailItem.Body ?? ""} {sourceMailItem.HTMLBody ?? ""}";
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Checking for placeholder '{placeholder}' in email content (length: {emailContent.Length})");
 
-                if (!emailContent.Contains(placeholder))
+                // Improved placeholder detection with case-insensitive search (.NET Framework compatible)
+                if (emailContent.IndexOf(placeholder, StringComparison.OrdinalIgnoreCase) == -1)
                 {
+                    System.Diagnostics.Debug.WriteLine("DEBUG: Placeholder NOT found - showing warning");
                     // Send a warning back to JavaScript for user confirmation
                     SendResponseToJS("placeholderWarning",
-                        $"⚠️ Warning: The placeholder '{placeholder}' was not found in the selected email.\n\n" +
+                        $"⚠️ Warning: The placeholder '{placeholder}' was not found in the current email.\n\n" +
                         "This means the emails will be identical without personalization.\n\n" +
                         "Do you want to continue anyway?",
                         new
@@ -480,9 +553,13 @@ namespace Multi_Send
                         });
 
                     // Release COM ref and return - wait for user confirmation
-                    if (sourceMailItem != null)
+                    if (!isInspectorMode && sourceMailItem != null)
                         System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
                     return;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("DEBUG: Placeholder FOUND - proceeding");
                 }
             }
 
@@ -526,21 +603,45 @@ namespace Multi_Send
 
             CleanupTempFiles(emailData.Attachments);
 
-            // Release COM ref
-            if (sourceMailItem != null)
+            // Release COM ref only if in Explorer mode
+            if (!isInspectorMode && sourceMailItem != null)
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(sourceMailItem);
         }
 
-        private Selection GetSelectedOutlookItem()
+        private object GetSelectedOutlookItem()
         {
             try
             {
-                return outlookApp.ActiveExplorer().Selection;
+                if (isInspectorMode && inspector != null)
+                {
+                    // In Inspector mode - work with the current item being composed/edited
+                    var mailItem = inspector.CurrentItem as MailItem;
+                    if (mailItem != null)
+                    {
+                        // Create a fake Selection-like wrapper for consistency
+                        return new InspectorItemWrapper { CurrentItem = mailItem };
+                    }
+                    return null;
+                }
+                else
+                {
+                    // In Explorer mode - work with selected items
+                    return outlookApp.ActiveExplorer().Selection;
+                }
             }
-            catch
+            catch (System.Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Error getting selected item: {ex.Message}");
                 return null;
             }
+        }
+
+        // NEW: Wrapper class to make Inspector items work like Selection
+        private class InspectorItemWrapper
+        {
+            public MailItem CurrentItem { get; set; }
+            public int Count => CurrentItem != null ? 1 : 0;
+            public object this[int index] => index == 1 && CurrentItem != null ? CurrentItem : null;
         }
 
         private EmailData ExtractEmailData(MailItem sourceEmail)
@@ -662,19 +763,34 @@ namespace Multi_Send
                 return;
             }
 
-            // Access Outlook safely
-            var selectedItem = GetSelectedOutlookItem();
-            if (selectedItem == null || selectedItem.Count == 0)
-            {
-                SendResponseToJS("error", "Please select an email to detect placeholder from.");
-                return;
-            }
+            MailItem mailItem = null;
 
-            var mailItem = selectedItem[1] as MailItem;
-            if (mailItem == null)
+            if (isInspectorMode && inspector != null)
             {
-                SendResponseToJS("error", "Selected item is not an email.");
-                return;
+                // In compose mode - use current item
+                mailItem = inspector.CurrentItem as MailItem;
+                if (mailItem == null)
+                {
+                    SendResponseToJS("error", "Current item is not an email.");
+                    return;
+                }
+            }
+            else
+            {
+                // In Explorer mode - use selected item
+                var selectedItem = GetSelectedOutlookItem() as Selection;
+                if (selectedItem == null || selectedItem.Count == 0)
+                {
+                    SendResponseToJS("error", "Please select an email to detect placeholder from.");
+                    return;
+                }
+
+                mailItem = selectedItem[1] as MailItem;
+                if (mailItem == null)
+                {
+                    SendResponseToJS("error", "Selected item is not an email.");
+                    return;
+                }
             }
 
             string text = $"{mailItem.Subject} {mailItem.Body}";

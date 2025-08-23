@@ -4,6 +4,8 @@ using System.Windows.Forms;
 using Microsoft.Office.Tools;
 using Outlook = Microsoft.Office.Interop.Outlook;
 using Microsoft.Win32;
+using System.Threading.Tasks; // Added for async/await
+using System.Text.RegularExpressions; // Added for Regex
 
 namespace Multi_Send
 {
@@ -100,7 +102,8 @@ namespace Multi_Send
         {
             if (inspectorTaskPanes.ContainsKey(inspector)) return;
 
-            var inspectorTaskPaneForm = new TaskPaneForm();
+            // Pass the inspector context to TaskPaneForm
+            var inspectorTaskPaneForm = new TaskPaneForm(inspector);
             var inspectorCustomTaskPane = this.CustomTaskPanes.Add(inspectorTaskPaneForm, "Multi-Send", inspector);
             inspectorCustomTaskPane.Width = 500;
             inspectorCustomTaskPane.DockPosition = Microsoft.Office.Core.MsoCTPDockPosition.msoCTPDockPositionRight;
@@ -146,8 +149,62 @@ namespace Multi_Send
 
         public void ToggleTaskPane()
         {
-            try { RecreateTaskPane(); customTaskPane.Visible = true; }
-            catch (Exception ex) { MessageBox.Show(ex.Message); }
+            try 
+            { 
+                // Check if we're in an Inspector context first
+                var activeInspector = this.Application.ActiveInspector();
+                
+                if (activeInspector != null && activeInspector.CurrentItem is Outlook.MailItem)
+                {
+                    // We're in a compose window - create/show inspector task pane
+                    if (!inspectorTaskPanes.ContainsKey(activeInspector))
+                    {
+                        CreateInspectorTaskPane(activeInspector);
+                    }
+                    
+                    if (inspectorTaskPanes.ContainsKey(activeInspector))
+                    {
+                        inspectorTaskPanes[activeInspector].Visible = true;
+                    }
+                }
+                else
+                {
+                    // We're in main window - show main task pane
+                    RecreateTaskPane(); 
+                    customTaskPane.Visible = true;
+                }
+            }
+            catch (Exception ex) 
+            { 
+                MessageBox.Show(ex.Message); 
+            }
+        }
+
+        private void ToggleInspectorTaskPane(Outlook.Inspector inspector)
+        {
+            try
+            {
+                if (inspectorTaskPanes.ContainsKey(inspector))
+                {
+                    // Task pane already exists for this inspector - just toggle visibility
+                    var existingTaskPane = inspectorTaskPanes[inspector];
+                    existingTaskPane.Visible = !existingTaskPane.Visible;
+                }
+                else
+                {
+                    // Create new task pane for this inspector
+                    CreateInspectorTaskPane(inspector);
+                    if (inspectorTaskPanes.ContainsKey(inspector))
+                    {
+                        inspectorTaskPanes[inspector].Visible = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error toggling inspector task pane: {ex.Message}");
+                MessageBox.Show($"Error opening Multi-Send in compose window: {ex.Message}");
+            }
         }
 
 

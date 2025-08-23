@@ -261,9 +261,13 @@ function autoDetectName(index) {
     clearTimeout(autoDetectTimeouts[index]);
     autoDetectTimeouts[index] = setTimeout(() => {
         if (recipients[index]?.email && !recipients[index]?.name) {
-            suggestNameForIndex(index, false);
+            const email = recipients[index].email;
+            // Only auto-detect if email looks complete (has @ and a dot after it)
+            if (email.includes('@') && email.split('@')[1]?.includes('.')) {
+                suggestNameForIndex(index, false);
+            }
         }
-    }, 300);
+    }, 1000); // Increased from 300ms to 1000ms
 }
 
 function updateRecipient(index, field, value) {
@@ -297,7 +301,13 @@ function suggestNameForIndex(index, shouldShowStatus = true) {
         const suggestedName = words.length > 0 ? words[0] : '';
 
         recipients[index].name = suggestedName;
-        renderRecipients();
+        
+        // FIXED: Update the specific input field instead of re-rendering everything
+        const nameInput = document.querySelector(`.email-input-row:nth-child(${index + 1}) .name-input`);
+        if (nameInput) {
+            nameInput.value = suggestedName;
+        }
+        
         updateCountText();
 
         // Only show status for manual button clicks, not auto-detection
