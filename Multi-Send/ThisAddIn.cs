@@ -149,61 +149,51 @@ namespace Multi_Send
 
         public void ToggleTaskPane()
         {
-            try 
-            { 
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("DEBUG: ToggleTaskPane started");
+
                 // Check if we're in an Inspector context first
                 var activeInspector = this.Application.ActiveInspector();
-                
+                System.Diagnostics.Debug.WriteLine($"DEBUG: ActiveInspector: {activeInspector != null}");
+
                 if (activeInspector != null && activeInspector.CurrentItem is Outlook.MailItem)
                 {
+                    System.Diagnostics.Debug.WriteLine("DEBUG: In Inspector mode - creating/showing inspector task pane");
                     // We're in a compose window - create/show inspector task pane
                     if (!inspectorTaskPanes.ContainsKey(activeInspector))
                     {
+                        System.Diagnostics.Debug.WriteLine("DEBUG: Creating new inspector task pane");
                         CreateInspectorTaskPane(activeInspector);
                     }
-                    
+
                     if (inspectorTaskPanes.ContainsKey(activeInspector))
                     {
+                        System.Diagnostics.Debug.WriteLine("DEBUG: Showing inspector task pane");
                         inspectorTaskPanes[activeInspector].Visible = true;
                     }
                 }
                 else
                 {
+                    System.Diagnostics.Debug.WriteLine("DEBUG: In Explorer mode - showing main task pane");
                     // We're in main window - show main task pane
-                    RecreateTaskPane(); 
-                    customTaskPane.Visible = true;
-                }
-            }
-            catch (Exception ex) 
-            { 
-                MessageBox.Show(ex.Message); 
-            }
-        }
-
-        private void ToggleInspectorTaskPane(Outlook.Inspector inspector)
-        {
-            try
-            {
-                if (inspectorTaskPanes.ContainsKey(inspector))
-                {
-                    // Task pane already exists for this inspector - just toggle visibility
-                    var existingTaskPane = inspectorTaskPanes[inspector];
-                    existingTaskPane.Visible = !existingTaskPane.Visible;
-                }
-                else
-                {
-                    // Create new task pane for this inspector
-                    CreateInspectorTaskPane(inspector);
-                    if (inspectorTaskPanes.ContainsKey(inspector))
+                    RecreateTaskPane();
+                    if (customTaskPane != null)
                     {
-                        inspectorTaskPanes[inspector].Visible = true;
+                        customTaskPane.Visible = true;
+                        System.Diagnostics.Debug.WriteLine("DEBUG: Main task pane made visible");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("DEBUG: ERROR - customTaskPane is null!");
                     }
                 }
+                System.Diagnostics.Debug.WriteLine("DEBUG: ToggleTaskPane completed");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error toggling inspector task pane: {ex.Message}");
-                MessageBox.Show($"Error opening Multi-Send in compose window: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"DEBUG: ToggleTaskPane error: {ex.Message}");
+                MessageBox.Show($"Error opening Multi-Send: {ex.Message}");
             }
         }
 
