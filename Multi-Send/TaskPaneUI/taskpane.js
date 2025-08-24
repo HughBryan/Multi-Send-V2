@@ -37,18 +37,60 @@ function handleBackendResponse(response) {
     console.log('Handling response type:', response.type);
 
     if (response.type === 'success') {
-        showStatus(response.message, 'success');
-        resetUI();
-        hideSendConfirmation();
+        // Show success in dialog if it's open, otherwise use normal status
+        const progressElement = document.getElementById('sendingProgress');
+        if (progressElement && progressElement.style.display !== 'none') {
+            document.getElementById('confirmProgressText').textContent = response.message;
+            document.getElementById('confirmProgressFill').style.width = '100%';
+            setTimeout(() => {
+                hideSendConfirmation();
+                showStatus(response.message, 'success');
+                resetUI();
+            }, 1500);
+        } else {
+            showStatus(response.message, 'success');
+            resetUI();
+            hideSendConfirmation();
+        }
+
     } else if (response.type === 'error') {
-        showStatus(response.message, 'error');
-        resetUI();
-        hideSendConfirmation();
+        // Show error in dialog if it's open, otherwise use normal status
+        const progressElement = document.getElementById('sendingProgress');
+        if (progressElement && progressElement.style.display !== 'none') {
+            document.getElementById('confirmProgressText').textContent = response.message;
+            setTimeout(() => {
+                hideSendConfirmation();
+                showStatus(response.message, 'error');
+                resetUI();
+            }, 2000);
+        } else {
+            showStatus(response.message, 'error');
+            resetUI();
+            hideSendConfirmation();
+        }
+
     } else if (response.type === 'progress') {
-        updateProgress(response.current, response.total, response.message);
+        // Try to show progress in dialog first, fallback to main progress bar
+        const dialogProgress = document.getElementById('sendingProgress');
+        const dialogText = document.getElementById('confirmProgressText');
+        const dialogFill = document.getElementById('confirmProgressFill');
+
+        if (dialogProgress && dialogText && dialogFill && dialogProgress.style.display !== 'none') {
+            // Show in confirmation dialog
+            dialogText.textContent = response.message;
+            if (response.current && response.total) {
+                const percentage = (response.current / response.total) * 100;
+                dialogFill.style.width = `${percentage}%`;
+            }
+        } else {
+            // Fallback to main progress bar
+            updateProgress(response.current, response.total, response.message);
+        }
+
     } else if (response.type === 'placeholderWarning') {
         hideSendConfirmation();
         handlePlaceholderWarning(response.message, response.data);
+
     } else if (response.type === 'attachmentCount') {
         const attachmentElement = document.getElementById('confirmAttachmentCount');
         if (attachmentElement) {
@@ -167,12 +209,16 @@ function hideSendConfirmation() {
 function proceedWithSend() {
     console.log('=== USER CONFIRMED SEND ===');
     if (window.pendingSendData) {
-        sendMessageToCS('duplicateEmail', window.pendingSendData);
-        hideSendConfirmation();
+        // Try to show progress elements (gracefully handle if they don't exist)
+        const buttons = document.querySelector('.confirmation-buttons');
+        const progress = document.getElementById('sendingProgress');
+        const progressText = document.getElementById('confirmProgressText');
 
-        // Show progress
-        document.getElementById("progress").classList.add("show");
-        document.getElementById("generateBtn").disabled = true;
+        if (buttons) buttons.style.display = 'none';
+        if (progress) progress.style.display = 'block';
+        if (progressText) progressText.textContent = 'Starting to send emails...';
+
+        sendMessageToCS('duplicateEmail', window.pendingSendData);
     }
 }
 
