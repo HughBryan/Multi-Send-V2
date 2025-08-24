@@ -24,9 +24,9 @@ body {
     margin-bottom: 16px;
 }
 
-.section:last-child {
-    margin-bottom: 0;
-}
+    .section:last-child {
+        margin-bottom: 0;
+    }
 
 .label {
     display: block;
@@ -45,11 +45,11 @@ body {
     box-sizing: border-box;
 }
 
-.text-input:focus {
-    outline: none;
-    border-color: #0078d4;
-    box-shadow: 0 0 0 1px #0078d4;
-}
+    .text-input:focus {
+        outline: none;
+        border-color: #0078d4;
+        box-shadow: 0 0 0 1px #0078d4;
+    }
 
 .placeholder-section {
     display: flex;
@@ -72,9 +72,9 @@ body {
     white-space: nowrap;
 }
 
-.detect-btn:hover {
-    background: #edebe9;
-}
+    .detect-btn:hover {
+        background: #edebe9;
+    }
 
 .email-list {
     border: 1px solid #d1d1d1;
@@ -93,9 +93,9 @@ body {
     background: white;
 }
 
-.email-input-row:last-child {
-    border-bottom: none;
-}
+    .email-input-row:last-child {
+        border-bottom: none;
+    }
 
 .email-input {
     flex: 1;
@@ -124,9 +124,9 @@ body {
     white-space: nowrap;
 }
 
-.suggest-btn:hover {
-    background: #edebe9;
-}
+    .suggest-btn:hover {
+        background: #edebe9;
+    }
 
 .remove-btn {
     background: #fdf2f2;
@@ -138,9 +138,9 @@ body {
     color: #e74c3c;
 }
 
-.remove-btn:hover {
-    background: #f8d7da;
-}
+    .remove-btn:hover {
+        background: #f8d7da;
+    }
 
 .button-row {
     display: flex;
@@ -159,9 +159,9 @@ body {
     color: #605e5c;
 }
 
-.add-email-btn:hover {
-    background: #edebe9;
-}
+    .add-email-btn:hover {
+        background: #edebe9;
+    }
 
 .clear-all-btn {
     background: #fdf2f2;
@@ -174,16 +174,16 @@ body {
     white-space: nowrap;
 }
 
-.clear-all-btn:hover {
-    background: #f8d7da;
-}
+    .clear-all-btn:hover {
+        background: #f8d7da;
+    }
 
-.clear-all-btn:disabled {
-    background: #f8f9fa;
-    border-color: #dee2e6;
-    color: #6c757d;
-    cursor: not-allowed;
-}
+    .clear-all-btn:disabled {
+        background: #f8f9fa;
+        border-color: #dee2e6;
+        color: #6c757d;
+        cursor: not-allowed;
+    }
 
 .generate-btn {
     background-color: #0078d4;
@@ -197,14 +197,14 @@ body {
     width: 100%;
 }
 
-.generate-btn:hover:not(:disabled) {
-    background-color: #106ebe;
-}
+    .generate-btn:hover:not(:disabled) {
+        background-color: #106ebe;
+    }
 
-.generate-btn:disabled {
-    background-color: #a19f9d;
-    cursor: not-allowed;
-}
+    .generate-btn:disabled {
+        background-color: #a19f9d;
+        cursor: not-allowed;
+    }
 
 .status {
     margin-top: 12px;
@@ -214,27 +214,27 @@ body {
     display: none;
 }
 
-.status.show {
-    display: block;
-}
+    .status.show {
+        display: block;
+    }
 
-.status.success {
-    background-color: #dff6dd;
-    color: #107c10;
-    border: 1px solid #c3e6c3;
-}
+    .status.success {
+        background-color: #dff6dd;
+        color: #107c10;
+        border: 1px solid #c3e6c3;
+    }
 
-.status.error {
-    background-color: #fde7e9;
-    color: #d13438;
-    border: 1px solid #f5c6cb;
-}
+    .status.error {
+        background-color: #fde7e9;
+        color: #d13438;
+        border: 1px solid #f5c6cb;
+    }
 
-.status.info {
-    background-color: #deecf9;
-    color: #0078d4;
-    border: 1px solid #b6d6f2;
-}
+    .status.info {
+        background-color: #deecf9;
+        color: #0078d4;
+        border: 1px solid #b6d6f2;
+    }
 
 .help-text {
     font-size: 11px;
@@ -255,9 +255,9 @@ body {
     display: none;
 }
 
-.progress.show {
-    display: block;
-}
+    .progress.show {
+        display: block;
+    }
 
 .progress-bar {
     width: 100%;
@@ -292,9 +292,9 @@ body {
     display: none;
 }
 
-.paste-hint.show {
-    display: block;
-}
+    .paste-hint.show {
+        display: block;
+    }
 
 .checkbox-container {
     display: flex;
@@ -316,27 +316,29 @@ body {
         color: #0078d4;
     }
 
-/* Warning style for auto-send help text */
 .help-text.warning {
     color: #d83b01;
     font-weight: 500;
 }
 
-/* Confirmation Dialog Overlay */
+/* ---------------- CONFIRMATION DIALOG ---------------- */
 .confirmation-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0,0,0,0.45);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    backdrop-filter: blur(2px);
+    padding: 0 16px; /* NEW ? forces breathing room left/right */
+    box-sizing: border-box;
 }
 
     .confirmation-overlay.show {
@@ -345,71 +347,100 @@ body {
     }
 
 .confirmation-dialog {
-    background: white;
-    border-radius: 8px;
-    padding: 24px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    transform: scale(0.9);
-    transition: transform 0.3s ease;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    width: 95%; /* leave breathing room at any width */
+    max-width: 380px; /* cap for large panes */
+    margin: 0 auto; /* center horizontally */
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.2s ease;
+    border: 1px solid rgba(0,0,0,0.08);
 }
 
 .confirmation-overlay.show .confirmation-dialog {
-    transform: scale(1);
+    transform: scale(1) translateY(0);
 }
 
 .confirmation-header {
     margin-bottom: 16px;
+    text-align: center;
 }
 
     .confirmation-header h3 {
         margin: 0;
-        color: #323130;
+        color: #1a1a1a;
         font-size: 18px;
         font-weight: 600;
     }
 
 .confirmation-content {
-    margin-bottom: 24px;
+    padding: 0 0 20px 0;
     color: #605e5c;
     line-height: 1.4;
 }
 
-    .confirmation-content p {
-        margin: 0 0 12px 0;
-    }
-
-.confirmation-details {
+/* Summary block – vertical layout */
+.confirmation-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     background: #f8f9fa;
-    padding: 12px;
-    border-radius: 4px;
-    margin-top: 12px;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px; /* was 16px */
 }
 
-    .confirmation-details p {
-        margin: 4px 0;
-        font-size: 12px;
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e1e1e1;
+}
+
+    .summary-item:last-child {
+        border-bottom: none;
     }
 
-    .confirmation-details strong {
-        color: #323130;
-    }
+.summary-label {
+    font-size: 11px;
+    color: #605e5c;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
 
+.summary-text, .summary-number {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0078d4;
+}
+
+
+.summary-divider {
+    width: 1px;
+    background: #e1e1e1;
+}
+
+/* Buttons */
 .confirmation-buttons {
     display: flex;
     gap: 12px;
-    justify-content: flex-end;
+    padding-top: 0; /* was 4px */
 }
 
 .cancel-btn {
     background: #f3f2f1;
     border: 1px solid #d1d1d1;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 8px 16px;
     cursor: pointer;
     color: #323130;
     font-size: 13px;
+    flex: 1;
 }
 
     .cancel-btn:hover {
@@ -419,44 +450,17 @@ body {
 .confirm-btn {
     background: #0078d4;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 8px 16px;
     cursor: pointer;
     color: white;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
+    flex: 2;
 }
 
     .confirm-btn:hover {
         background: #106ebe;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,120,212,0.2);
     }
-
-.sending-progress {
-    margin-top: 16px;
-    padding: 12px;
-    background: #f8f9fa;
-    border-radius: 4px;
-    border-left: 4px solid #0078d4;
-}
-
-.progress-info .progress-text {
-    font-size: 12px;
-    color: #323130;
-    margin-bottom: 8px;
-    font-weight: 500;
-}
-
-.progress-info .progress-bar {
-    width: 100%;
-    height: 4px;
-    background-color: #edebe9;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.progress-info .progress-fill {
-    height: 100%;
-    background-color: #0078d4;
-    width: 0%;
-    transition: width 0.3s ease;
-}

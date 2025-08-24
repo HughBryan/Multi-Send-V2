@@ -95,7 +95,7 @@ function handleBackendResponse(response) {
         const attachmentElement = document.getElementById('confirmAttachmentCount');
         if (attachmentElement) {
             const count = response.data?.count || 0;
-            attachmentElement.textContent = count === 0 ? 'None' : count.toString();
+            attachmentElement.textContent = count === 0 ? '0' : count.toString();
             showSendConfirmation();
         }
     }

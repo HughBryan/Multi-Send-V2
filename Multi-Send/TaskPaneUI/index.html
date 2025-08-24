@@ -56,14 +56,26 @@
     <div id="confirmationOverlay" class="confirmation-overlay">
         <div class="confirmation-dialog">
             <div class="confirmation-header">
-                <h3>Confirm Email Send</h3>
+                <h3>Send Confirmation</h3>
             </div>
             <div class="confirmation-content">
-                <p>Ready to send <span id="confirmRecipientCount">0</span> personalized emails?</p>
-                <div class="confirmation-details">
-                    <p><strong>Placeholder:</strong> <span id="confirmPlaceholder">{{name}}</span></p>
-                    <p><strong>Attachments:</strong> <span id="confirmAttachmentCount">Loading...</span></p>
+                <div class="confirmation-summary">
+                    <div class="summary-item">
+                        <span class="summary-number" id="confirmRecipientCount">0</span>
+                        <span class="summary-label">Recipients</span>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-item">
+                        <span class="summary-text" id="confirmPlaceholder">{{name}}</span>
+                        <span class="summary-label">Placeholder</span>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-item">
+                        <span class="summary-text" id="confirmAttachmentCount">Loading...</span>
+                        <span class="summary-label">Attachments</span>
+                    </div>
                 </div>
+
                 <div id="sendingProgress" class="sending-progress" style="display: none;">
                     <div class="progress-info">
                         <div class="progress-text" id="confirmProgressText">Preparing to send...</div>
@@ -79,7 +91,6 @@
             </div>
         </div>
     </div>
-
     <script src="taskpane.js"></script>
 </body>
 </html>
