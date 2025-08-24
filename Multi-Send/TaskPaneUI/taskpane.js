@@ -98,8 +98,17 @@ function handleBackendResponse(response) {
             attachmentElement.textContent = count === 0 ? '0' : count.toString();
             showSendConfirmation();
         }
+    } else if (response.type === 'emailSubject') {
+        console.log('Received subject:', response.data);
+        const subjectElement = document.getElementById('confirmSubject');
+        if (subjectElement && response.data && response.data.subject) {
+            subjectElement.textContent = response.data.subject;
+        }
     }
+
 }
+
+
 
 function handlePlaceholderWarning(message, data) {
     resetUI();
@@ -163,10 +172,11 @@ async function generateEmails() {
 
         console.log('Showing confirmation dialog for:', filledRecipients.length, 'recipients');
 
-        // Update confirmation dialog
+        
         document.getElementById('confirmRecipientCount').textContent = filledRecipients.length;
         document.getElementById('confirmPlaceholder').textContent = placeholder;
         document.getElementById('confirmAttachmentCount').textContent = 'Loading...';
+        document.getElementById('confirmSubject').textContent = 'Loading...';
 
         // Store data for later use
         window.pendingSendData = {
@@ -177,6 +187,7 @@ async function generateEmails() {
 
         // FIXED: Only request attachment count (not full send)
         sendMessageToCS('getAttachmentCount', window.pendingSendData);
+        sendMessageToCS('getEmailSubject', {});
 
     } catch (error) {
         console.error("Error in generateEmails:", error);

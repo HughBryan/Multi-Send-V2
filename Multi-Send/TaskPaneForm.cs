@@ -154,6 +154,10 @@ namespace Multi_Send
                         SendToJS("success", "🎉 Communication working!");
                         break;
 
+                    case "getEmailSubject":
+                        GetEmailSubject();
+                        break;
+
                     case "getAttachmentCount":
                         System.Diagnostics.Debug.WriteLine("DEBUG: Processing getAttachmentCount action");
                         RunSafe(() => HandleGetAttachmentCount(jobj["data"]));
@@ -417,6 +421,24 @@ namespace Multi_Send
             }
         }
 
+        private void GetEmailSubject()
+        {
+            var source = GetActiveMailItem();
+            if (source == null) { SendToJS("error", "No email selected."); return; }
+
+            try
+            {
+                string subject = source.Subject ?? "(No Subject)";
+                SendToJS("emailSubject", "", new { subject = subject });
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Sent email subject: {subject}");
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting email subject: {ex.Message}");
+                SendToJS("emailSubject", "", new { subject = "(Unknown Subject)" });
+            }
+        }
+
         private async Task CreateDuplicateEmail(EmailData src, string ph, Recipient r, bool autoSend)
         {
             MailItem m = null;
@@ -506,6 +528,8 @@ namespace Multi_Send
             base.Dispose(disposing);
         }
     }
+
+       
 
     public class Recipient { public string Email { get; set; } public string Name { get; set; } }
     public class EmailData

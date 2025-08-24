@@ -60,19 +60,27 @@
             </div>
             <div class="confirmation-content">
                 <div class="confirmation-summary">
-                    <div class="summary-item">
-                        <span class="summary-number" id="confirmRecipientCount">0</span>
-                        <span class="summary-label">Recipients</span>
+                    <!-- Subject Line  -->
+                    <div class="summary-item subject-item">
+                        <span class="summary-text" id="confirmSubject">Loading...</span>
+                        <span class="summary-label">Subject</span>
                     </div>
-                    <div class="summary-divider"></div>
-                    <div class="summary-item">
-                        <span class="summary-text" id="confirmPlaceholder">{{name}}</span>
-                        <span class="summary-label">Placeholder</span>
-                    </div>
-                    <div class="summary-divider"></div>
-                    <div class="summary-item">
-                        <span class="summary-text" id="confirmAttachmentCount">Loading...</span>
-                        <span class="summary-label">Attachments</span>
+
+                    <div class="summary-stats">
+                        <div class="summary-item">
+                            <span class="summary-number" id="confirmRecipientCount">0</span>
+                            <span class="summary-label">Recipients</span>
+                        </div>
+                        <div class="summary-divider"></div>
+                        <div class="summary-item">
+                            <span class="summary-text" id="confirmPlaceholder">{{name}}</span>
+                            <span class="summary-label">Placeholder</span>
+                        </div>
+                        <div class="summary-divider"></div>
+                        <div class="summary-item">
+                            <span class="summary-text" id="confirmAttachmentCount">Loading...</span>
+                            <span class="summary-label">Attachments</span>
+                        </div>
                     </div>
                 </div>
 

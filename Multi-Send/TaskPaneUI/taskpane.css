@@ -464,3 +464,36 @@ body {
         transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(0,120,212,0.2);
     }
+
+/* Subject line styling */
+.subject-item {
+    width: 100%;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e1e1e1;
+}
+
+    .subject-item .summary-text {
+        font-size: 14px;
+        font-weight: 600;
+        color: #323130;
+        line-height: 1.3;
+        word-break: break-word;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .subject-item .summary-label {
+        font-size: 10px;
+        color: #605e5c;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 500;
+    }
+
+/* Adjust the stats section layout */
+.summary-stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
