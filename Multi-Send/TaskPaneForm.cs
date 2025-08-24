@@ -5,7 +5,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -94,6 +96,8 @@ namespace Multi_Send
 
                 // Inline CSS & JS for security
                 html = Regex.Replace(html, @"style-src\s+'self'", "style-src 'self' 'unsafe-inline'", RegexOptions.IgnoreCase);
+
+                // THEN: Inline the CSS and JS
                 html = Regex.Replace(html, @"<link\s+rel=[""']stylesheet[""']\s+href=[""']taskpane\.css[""']\s*/>", $"<style>{css}</style>", RegexOptions.IgnoreCase);
                 html = Regex.Replace(html, @"<script\s+src=[""']taskpane\.js[""']\s*></script>", $"<script>{js}</script>", RegexOptions.IgnoreCase);
 
@@ -153,7 +157,7 @@ namespace Multi_Send
             }
             catch (System.Exception ex)
             {
-                SendToJS("error", $"Message error: {ex.Message}");
+                SendToJS("error", "Operation failed. Please try again.");
             }
         }
 
@@ -165,7 +169,7 @@ namespace Multi_Send
             }
             catch (System.Exception ex) 
             {
-                SendToJS("error", ex.Message); 
+                SendToJS("error", "Operation failed. Please try again.");
             }
         }
 
@@ -259,7 +263,7 @@ namespace Multi_Send
             }
             catch (System.Exception ex)
             {
-                SendToJS("error", $"Error accessing email: {ex.Message}");
+                SendToJS("error", "Operation failed. Please try again.");
                 return;
             }
 
@@ -334,7 +338,10 @@ namespace Multi_Send
                         try
                         {
                             string fileName = Path.GetFileName(a.FileName ?? "attachment");
-                            string tmp = Path.Combine(Path.GetTempPath(), $"EmailDup_{Guid.NewGuid()}_{fileName}");
+                            // Replace line 339:
+                            string secureDir = Path.Combine(Path.GetTempPath(), "Multi-Send", Environment.UserName, Process.GetCurrentProcess().Id.ToString());
+                            Directory.CreateDirectory(secureDir);
+                            string tmp = Path.Combine(secureDir, Guid.NewGuid().ToString("N"));
                             a.SaveAsFile(tmp);
                             data.Attachments.Add(new AttachmentData 
                             { 
@@ -397,6 +404,12 @@ namespace Multi_Send
                 m.Importance = src.Importance;
                 m.Sensitivity = src.Sensitivity;
 
+                // basic validation
+                if (string.IsNullOrWhiteSpace(r.Email) || !r.Email.Contains("@"))
+                {
+                    throw new ArgumentException("Invalid email address");
+                }
+
                 m.Recipients.Add(r.Email);
                 m.Recipients.ResolveAll();
 
@@ -452,11 +465,50 @@ namespace Multi_Send
             }
             SendToJS("info", "No common placeholders found.");
         }
-
         private void CleanupTempFiles(List<AttachmentData> attachments)
         {
             foreach (var a in attachments)
-                try { if (File.Exists(a.TempFilePath)) File.Delete(a.TempFilePath); } catch { }
+            {
+                try
+                {
+                    if (File.Exists(a.TempFilePath))
+                    {
+                        // Overwrite file with random data before deletion (security best practice)
+                        try
+                        {
+                            var random = new Random();
+                            var buffer = new byte[1024];
+                            using (var fs = File.OpenWrite(a.TempFilePath))
+                            {
+                                long fileSize = fs.Length;
+                                fs.Position = 0;
+                                for (long i = 0; i < fileSize; i += buffer.Length)
+                                {
+                                    random.NextBytes(buffer);
+                                    int bytesToWrite = (int)Math.Min(buffer.Length, fileSize - i);
+                                    fs.Write(buffer, 0, bytesToWrite);
+                                }
+                                fs.Flush();
+                            }
+                        }
+                        catch { /* Overwrite failed, still try to delete */ }
+
+                        File.Delete(a.TempFilePath);
+                    }
+                }
+                catch { /* Ignore cleanup errors */ }
+            }
+
+            // Try to clean up the temp directory if empty
+            try
+            {
+                string secureDir = Path.Combine(Path.GetTempPath(), "Multi-Send", Environment.UserName, Process.GetCurrentProcess().Id.ToString());
+                if (Directory.Exists(secureDir) && !Directory.EnumerateFileSystemEntries(secureDir).Any())
+                {
+                    Directory.Delete(secureDir);
+                }
+            }
+            catch { /* Ignore directory cleanup errors */ }
         }
 
         protected override void Dispose(bool disposing)
