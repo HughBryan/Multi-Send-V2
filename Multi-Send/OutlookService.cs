@@ -164,29 +164,45 @@ namespace Multi_Send
 
                 if (source?.Attachments != null)
                 {
-foreach (Attachment a in source.Attachments)
-{
-    try
-    {
-        string fileName = a.FileName ?? "attachment";
-        string secureDir = Path.Combine(Path.GetTempPath(), "Multi-Send", Environment.UserName, Process.GetCurrentProcess().Id.ToString());
-        Directory.CreateDirectory(secureDir);
-        
-        // IMPORTANT: Keep the original file extension
-        string extension = Path.GetExtension(fileName);
-        string tmp = Path.Combine(secureDir, Guid.NewGuid().ToString("N") + extension);
-        
-        a.SaveAsFile(tmp);
-        data.Attachments.Add(new AttachmentData 
-        { 
-            FileName = fileName, 
-            TempFilePath = tmp, 
-            Type = a.Type 
-        });
-    }
+                    // In ExtractEmailData method, replace the attachment extraction:
+                    // In ExtractEmailData method, replace the temp file creation:
+                    foreach (Attachment a in source.Attachments)
+                    {
+                        try
+                        {
+                            string fullPath = a.FileName ?? "attachment";
+                            string originalFileName = Path.GetFileName(fullPath);
+
+                            string secureDir = Path.Combine(Path.GetTempPath(), "Multi-Send", Environment.UserName, Process.GetCurrentProcess().Id.ToString());
+                            Directory.CreateDirectory(secureDir);
+
+                            // Use the ACTUAL filename instead of random GUID
+                            string tmp = Path.Combine(secureDir, originalFileName);
+
+                            // If file already exists, add a number suffix
+                            int counter = 1;
+                            while (File.Exists(tmp))
+                            {
+                                string nameWithoutExt = Path.GetFileNameWithoutExtension(originalFileName);
+                                string extension = Path.GetExtension(originalFileName);
+                                tmp = Path.Combine(secureDir, $"{nameWithoutExt}_{counter}{extension}");
+                                counter++;
+                            }
+
+                            a.SaveAsFile(tmp);
+
+                            data.Attachments.Add(new AttachmentData
+                            {
+                                FileName = originalFileName,
+                                TempFilePath = tmp,
+                                Type = a.Type
+                            });
+
+                            System.Diagnostics.Debug.WriteLine($"Stored filename: '{originalFileName}', Temp path: '{tmp}'");
+                        }
                         catch (System.Exception ex)
                         {
-                            // Silently handle errors for individual attachment extraction
+                            System.Diagnostics.Debug.WriteLine($"Attachment extraction error: {ex.Message}");
                         }
                     }
                 }
@@ -234,21 +250,20 @@ foreach (Attachment a in source.Attachments)
 
                 // Add attachments with detailed debugging
                 // In CreateDuplicateEmail method, replace the attachment adding section:
+                // In CreateDuplicateEmail method:
                 foreach (var att in src.Attachments)
                 {
                     if (File.Exists(att.TempFilePath))
                     {
                         try
                         {
-                            // Add with proper position and display name
-                            var attachment = m.Attachments.Add(
-                                att.TempFilePath,     // Source file path
-                                att.Type,             // Attachment type  
-                                1,                    // Position (1 = in body)
-                                att.FileName          // Display name (this is the key!)
-                            );
+                            // Add attachment and explicitly set the display name
+                            var attachment = m.Attachments.Add(att.TempFilePath, att.Type, 1);
 
-                            System.Diagnostics.Debug.WriteLine($"✅ Successfully attached: {att.FileName} (Type: {att.Type})");
+                            // Explicitly set the display name after adding
+                            attachment.DisplayName = att.FileName;
+
+                            System.Diagnostics.Debug.WriteLine($"✅ Added: {att.FileName}, DisplayName set to: {attachment.DisplayName}");
                         }
                         catch (System.Exception ex)
                         {
