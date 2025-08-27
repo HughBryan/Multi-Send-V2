@@ -164,8 +164,7 @@ namespace Multi_Send
 
                 if (source?.Attachments != null)
                 {
-                    // In ExtractEmailData method, replace the attachment extraction:
-                    // In ExtractEmailData method, replace the temp file creation:
+
                     foreach (Attachment a in source.Attachments)
                     {
                         try
