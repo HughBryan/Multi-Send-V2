@@ -18,7 +18,7 @@ namespace Multi_Send
             this.taskPane = taskPane;
         }
 
-        public async Task<string> GetEmailSubject()
+        public string GetEmailSubject()
         {
             var source = GetActiveMailItem();
             if (source == null) return null;
@@ -33,7 +33,7 @@ namespace Multi_Send
             }
         }
 
-        public async Task<int> GetAttachmentCount()
+        public int GetAttachmentCount()
         {
             var source = GetActiveMailItem();
             if (source == null) return 0;
@@ -46,6 +46,26 @@ namespace Multi_Send
             catch (System.Exception ex)
             {
                 return 0;
+            }
+        }
+
+        public string GetEmailBody()
+        {
+            var source = GetActiveMailItem();
+            if (source == null) return null;
+
+            try
+            {
+                // Try HTML body first, then plain text body
+                var htmlBody = source.HTMLBody ?? "";
+                var textBody = source.Body ?? "";
+                
+                // Return the one that has content, preferring HTML
+                return !string.IsNullOrWhiteSpace(htmlBody) ? htmlBody : textBody;
+            }
+            catch (System.Exception ex)
+            {
+                return null;
             }
         }
 
