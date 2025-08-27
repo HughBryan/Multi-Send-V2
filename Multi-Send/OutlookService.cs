@@ -71,7 +71,8 @@ namespace Multi_Send
             
             if (source == null) 
                 return new DuplicateEmailResult { Success = false, Message = "No email selected." };
-            
+
+            EmailData emailData = null;
             try
             {
                 bool isSent = source.Sent;
@@ -80,50 +81,56 @@ namespace Multi_Send
                 {
                     return new DuplicateEmailResult { Success = false, Message = "🚫 Only works on unsent drafts you're composing." };
                 }
+
+                string content = $"{source.Subject} {source.Body} {source.HTMLBody}";
+                if (!force && !string.IsNullOrEmpty(placeholder) &&
+                    content.IndexOf(placeholder, StringComparison.OrdinalIgnoreCase) == -1)
+                {
+                    return new DuplicateEmailResult { 
+                        Success = false, 
+                        Message = $"⚠️ Placeholder '{placeholder}' not found.",
+                        RequiresConfirmation = true,
+                        Data = new { placeholder, recipients, autoSend }
+                    };
+                }
+
+                emailData = ExtractEmailData(source);
+                
+                int success = 0;
+                for (int i = 0; i < recipients.Count; i++)
+                {
+                    try
+                    {
+                        // Progress callback could be added here
+                        await CreateDuplicateEmail(emailData, placeholder, recipients[i], autoSend);
+                        success++;
+                        await Task.Delay(autoSend ? 500 : 100);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        // Silently handle errors for individual email creation
+                    }
+                }
+                await Task.Delay(2000); // Give Outlook time to finish with files
+                
+                return new DuplicateEmailResult { 
+                    Success = success == recipients.Count, 
+                    Message = $"✅ {success}/{recipients.Count} {(autoSend ? "sent" : "created")}.",
+                    AttachmentCount = emailData?.Attachments?.Count ?? 0
+                };
             }
             catch (System.Exception ex)
             {
                 return new DuplicateEmailResult { Success = false, Message = "Operation failed. Please try again." };
             }
-
-            string content = $"{source.Subject} {source.Body} {source.HTMLBody}";
-            if (!force && !string.IsNullOrEmpty(placeholder) &&
-                content.IndexOf(placeholder, StringComparison.OrdinalIgnoreCase) == -1)
+            finally
             {
-                return new DuplicateEmailResult { 
-                    Success = false, 
-                    Message = $"⚠️ Placeholder '{placeholder}' not found.",
-                    RequiresConfirmation = true,
-                    Data = new { placeholder, recipients, autoSend }
-                };
-            }
-
-            var emailData = ExtractEmailData(source);
-            
-            int success = 0;
-            for (int i = 0; i < recipients.Count; i++)
-            {
-                try
+                // ALWAYS cleanup, even on exceptions
+                if (emailData?.Attachments != null)
                 {
-                    // Progress callback could be added here
-                    await CreateDuplicateEmail(emailData, placeholder, recipients[i], autoSend);
-                    success++;
-                    await Task.Delay(autoSend ? 500 : 100);
-                }
-                catch (System.Exception ex)
-                {
-                    // Silently handle errors for individual email creation
+                    CleanupTempFiles(emailData.Attachments);
                 }
             }
-            await Task.Delay(2000); // Give Outlook time to finish with files
-
-            CleanupTempFiles(emailData.Attachments);
-            
-            return new DuplicateEmailResult { 
-                Success = success == recipients.Count, 
-                Message = $"✅ {success}/{recipients.Count} {(autoSend ? "sent" : "created")}.",
-                AttachmentCount = emailData?.Attachments?.Count ?? 0
-            };
         }
 
         private MailItem GetActiveMailItem()

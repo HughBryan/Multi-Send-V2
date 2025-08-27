@@ -71,22 +71,24 @@
                                 <DataTemplate>
                                     <Grid Margin="8">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="200"/>
+                                            <ColumnDefinition Width="120"/>
+                                            <ColumnDefinition Width="50"/>
+                                            <ColumnDefinition Width="30"/>
                                         </Grid.ColumnDefinitions>
                                         
                                         <TextBox Grid.Column="0" 
                                                 Text="{Binding Email, Mode=TwoWay}" 
                                                 FontSize="12" 
-                                                Padding="6,4" 
-                                                Margin="0,0,8,0"/>
+                                                Padding="8,6" 
+                                                Margin="0,0,8,0"
+                                                Tag="EmailInput"
+                                                LostFocus="EmailTextBox_LostFocus"/>
                                         
                                         <TextBox Grid.Column="1" 
                                                 Text="{Binding Name, Mode=TwoWay}" 
                                                 FontSize="12" 
-                                                Padding="6,4" 
+                                                Padding="8,6" 
                                                 Margin="0,0,8,0"/>
                                         
                                         <Button Grid.Column="2" 
@@ -226,14 +228,18 @@
               Visibility="{Binding IsConfirmationVisible, Converter={StaticResource BoolToVisConverter}}">
             
             <Border Background="White" 
-                   CornerRadius="12" 
+                   CornerRadius="8" 
                    Padding="20" 
                    MaxWidth="380" 
                    Margin="16" 
                    HorizontalAlignment="Center" 
-                   VerticalAlignment="Center">
+                   VerticalAlignment="Center"
+                   UseLayoutRounding="True" 
+                   SnapsToDevicePixels="True"
+                   TextOptions.TextFormattingMode="Display"
+                   TextOptions.TextRenderingMode="ClearType">
                 <Border.Effect>
-                    <DropShadowEffect Color="Black" Opacity="0.15" BlurRadius="32" ShadowDepth="8"/>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.1"/>
                 </Border.Effect>
                 
                 <StackPanel>

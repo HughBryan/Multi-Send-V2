@@ -6,6 +6,8 @@ using Outlook = Microsoft.Office.Interop.Outlook;
 using Microsoft.Win32;
 using System.Threading.Tasks; // Added for async/await
 using System.Text.RegularExpressions; // Added for Regex
+using System.IO;
+using System.Linq;
 
 namespace Multi_Send
 {
@@ -237,7 +239,6 @@ namespace Multi_Send
         {
             try
             {
-
                 // Clean up inspector task panes
                 foreach (var kvp in inspectorTaskPanes)
                 {
@@ -263,10 +264,29 @@ namespace Multi_Send
                     taskPane.Dispose();
                     taskPane = null;
                 }
+
+                // Clean up any remaining temp files
+                CleanupAllTempFiles();
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Shutdown error: {ex.Message}");
+            }
+        }
+
+        private void CleanupAllTempFiles()
+        {
+            try
+            {
+                string tempRoot = Path.Combine(Path.GetTempPath(), "Multi-Send", Environment.UserName);
+                if (Directory.Exists(tempRoot))
+                {
+                    Directory.Delete(tempRoot, true); // Recursive delete
+                }
+            }
+            catch
+            {
+                // Ignore cleanup errors on shutdown
             }
         }
 
